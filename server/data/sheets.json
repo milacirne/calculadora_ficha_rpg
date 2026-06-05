@@ -1,0 +1,21 @@
+{
+  "theme": "dark",
+  "activeCharacterIndex": 0,
+  "characters": [
+    {
+      "name": "Personagem 1",
+      "court": "",
+      "attributes": {
+        "vigor": 1,
+        "agilidade": 1,
+        "canalizacao": 1,
+        "determinacao": 1,
+        "astucia": 1,
+        "encanto": 1
+      },
+      "skills": [],
+      "traits": [],
+      "lineageGiftLevel": 0
+    }
+  ]
+}

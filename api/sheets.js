@@ -1,4 +1,4 @@
-import { get, put } from '@vercel/blob'
+import { get, list, put } from '@vercel/blob'
 
 const defaultState = {
   theme: 'dark',
@@ -80,6 +80,18 @@ export default async function handler(request, response) {
 
   try {
     if (request.method === 'GET') {
+      const existingFiles = await list({
+        prefix: pathname,
+        limit: 1,
+        token: blobToken,
+      })
+      const fileExists = existingFiles.blobs.some((blob) => blob.pathname === pathname)
+
+      if (!fileExists) {
+        response.status(200).json(defaultState)
+        return
+      }
+
       const result = await get(pathname, {
         access: 'private',
         token: blobToken,

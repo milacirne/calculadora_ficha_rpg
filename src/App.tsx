@@ -828,7 +828,8 @@ function App() {
   const [hoveredGiftLevel, setHoveredGiftLevel] = useState<number | null>(null)
   const [playerId] = useState(getStoredPlayerId)
   const [isLoaded, setIsLoaded] = useState(false)
-  const [saveStatus, setSaveStatus] = useState<'loading' | 'saved' | 'saving' | 'error'>('loading')
+  const [saveStatus, setSaveStatus] = useState<'loading' | 'saved' | 'saving' | 'unsaved' | 'error'>('loading')
+  const [savedSnapshot, setSavedSnapshot] = useState('')
 
   const character = characters[activeCharacterIndex]
   const selectedSkillIds = character.skills.map((skill) => skill.id)
@@ -883,6 +884,16 @@ function App() {
 
   const remainingXp = INITIAL_XP - spentXp
   const derivedAttributes = useMemo(() => getDerivedAttributes(character), [character])
+  const sheetPayload = useMemo(
+    () => ({
+      theme,
+      activeCharacterIndex,
+      characters,
+    }),
+    [activeCharacterIndex, characters, theme],
+  )
+  const currentSnapshot = useMemo(() => JSON.stringify(sheetPayload), [sheetPayload])
+  const hasUnsavedChanges = isLoaded && currentSnapshot !== savedSnapshot
 
   useEffect(() => {
     let isCurrent = true
@@ -907,9 +918,19 @@ function App() {
               )
             : [createCharacter(1)]
 
-        setTheme(data.theme === 'light' ? 'light' : 'dark')
+        const loadedTheme = data.theme === 'light' ? 'light' : 'dark'
+        const loadedActiveIndex = Math.min(Number(data.activeCharacterIndex) || 0, loadedCharacters.length - 1)
+
+        setTheme(loadedTheme)
         setCharacters(loadedCharacters)
-        setActiveCharacterIndex(Math.min(Number(data.activeCharacterIndex) || 0, loadedCharacters.length - 1))
+        setActiveCharacterIndex(loadedActiveIndex)
+        setSavedSnapshot(
+          JSON.stringify({
+            theme: loadedTheme,
+            activeCharacterIndex: loadedActiveIndex,
+            characters: loadedCharacters,
+          }),
+        )
         setSaveStatus('saved')
       })
       .catch(() => {
@@ -929,35 +950,34 @@ function App() {
   }, [playerId])
 
   useEffect(() => {
-    if (!isLoaded) {
+    if (hasUnsavedChanges && saveStatus === 'saved') {
+      setSaveStatus('unsaved')
+    }
+  }, [hasUnsavedChanges, saveStatus])
+
+  function handleSave() {
+    if (!isLoaded || saveStatus === 'saving') {
       return
     }
 
     setSaveStatus('saving')
-    const saveTimer = window.setTimeout(() => {
-      fetch(`${SHEETS_API_URL}?playerId=${encodeURIComponent(playerId)}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          theme,
-          activeCharacterIndex,
-          characters,
-        }),
+    fetch(`${SHEETS_API_URL}?playerId=${encodeURIComponent(playerId)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: currentSnapshot,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Nao foi possivel salvar as fichas.')
+        }
+
+        setSavedSnapshot(currentSnapshot)
+        setSaveStatus('saved')
       })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error('Nao foi possivel salvar as fichas.')
-          }
-
-          setSaveStatus('saved')
-        })
-        .catch(() => setSaveStatus('error'))
-    }, 600)
-
-    return () => window.clearTimeout(saveTimer)
-  }, [activeCharacterIndex, characters, isLoaded, playerId, theme])
+      .catch(() => setSaveStatus('error'))
+  }
 
   function updateActiveCharacter(updater: (character: Character) => Character) {
     setCharacters((currentCharacters) =>
@@ -1126,8 +1146,12 @@ function App() {
             {saveStatus === 'loading' && 'Carregando fichas...'}
             {saveStatus === 'saving' && 'Salvando...'}
             {saveStatus === 'saved' && 'Fichas salvas'}
+            {saveStatus === 'unsaved' && 'Alterações não salvas'}
             {saveStatus === 'error' && 'Backend offline'}
           </span>
+          <button className="save-button" type="button" onClick={handleSave} disabled={!hasUnsavedChanges || saveStatus === 'saving'}>
+            Salvar
+          </button>
           <div className="header-stats" aria-label="Resumo de XP">
             <strong>{INITIAL_XP} XP</strong>
             <strong>{spentXp} gasto</strong>
@@ -1225,7 +1249,6 @@ function App() {
         <section className="panel xp-panel">
           <div className="panel-heading">
             <h2>Atributos principais</h2>
-            <span className={remainingXp < 0 ? 'budget danger' : 'budget success'}>{remainingXp} XP</span>
           </div>
           <div className="attribute-grid">
             {attributes.map((attribute) => {

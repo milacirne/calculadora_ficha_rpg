@@ -13,7 +13,9 @@
   --border: #d8d0e8;
   --border-strong: #c6b8da;
   --success: #2f7a5d;
+  --warning: #9a6a1d;
   --danger: #b33d55;
+  --button-text: #ffffff;
   --shadow: rgba(63, 52, 89, 0.11);
 
   color: var(--text);
@@ -68,7 +70,9 @@ textarea {
   --border: #40374f;
   --border-strong: #5a4c6f;
   --success: #7ed7ae;
+  --warning: #f4c56d;
   --danger: #ff8aa0;
+  --button-text: #171321;
   --shadow: rgba(0, 0, 0, 0.32);
 }
 
@@ -148,6 +152,10 @@ h3 {
   color: var(--accent-strong);
 }
 
+.save-status.unsaved {
+  color: var(--warning);
+}
+
 .save-status.error {
   color: var(--danger);
 }
@@ -169,6 +177,7 @@ h3 {
 }
 
 .ghost-button,
+.save-button,
 .icon-button,
 .character-tab {
   border: 1px solid var(--border-strong);
@@ -185,6 +194,7 @@ h3 {
 }
 
 .ghost-button:hover,
+.save-button:hover,
 .icon-button:hover,
 .character-tab:hover {
   border-color: var(--accent);
@@ -196,6 +206,13 @@ h3 {
   padding: 8px 14px;
 }
 
+.save-button {
+  min-height: 38px;
+  padding: 8px 18px;
+  background: var(--accent);
+  color: var(--button-text);
+}
+
 .icon-button {
   width: 38px;
   height: 38px;
@@ -204,6 +221,7 @@ h3 {
   line-height: 1;
 }
 
+.save-button:disabled,
 .icon-button:disabled {
   cursor: not-allowed;
   opacity: 0.45;

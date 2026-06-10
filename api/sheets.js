@@ -27,6 +27,16 @@ function sanitizeState(payload) {
   }
 }
 
+function getErrorDetail(error) {
+  if (!(error instanceof Error)) {
+    return 'Erro desconhecido'
+  }
+
+  const cause = error.cause instanceof Error ? ` | cause: ${error.cause.message}` : ''
+
+  return `${error.name}: ${error.message}${cause}`
+}
+
 async function streamToString(stream) {
   if (!stream) {
     return ''
@@ -103,9 +113,10 @@ export default async function handler(request, response) {
     response.setHeader('Allow', ['GET', 'PUT'])
     response.status(405).json({ error: 'Metodo nao permitido.' })
   } catch (error) {
+    console.error('Erro em /api/sheets:', error)
     response.status(500).json({
       error: 'Nao foi possivel acessar o armazenamento.',
-      detail: error instanceof Error ? error.name : 'Erro desconhecido',
+      detail: getErrorDetail(error),
     })
   }
 }

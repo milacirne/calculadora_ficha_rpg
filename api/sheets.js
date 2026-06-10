@@ -93,7 +93,7 @@ export default async function handler(request, response) {
       }
 
       const result = await get(pathname, {
-        access: 'private',
+        access: 'public',
         token: blobToken,
         useCache: false,
       })
@@ -112,7 +112,7 @@ export default async function handler(request, response) {
       const safeState = sanitizeState(request.body)
 
       await put(pathname, JSON.stringify(safeState, null, 2), {
-        access: 'private',
+        access: 'public',
         allowOverwrite: true,
         contentType: 'application/json',
         token: blobToken,

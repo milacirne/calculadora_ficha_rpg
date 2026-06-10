@@ -57,12 +57,23 @@ export default async function handler(request, response) {
     return
   }
 
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN
+
+  if (!blobToken) {
+    response.status(500).json({
+      error: 'BLOB_READ_WRITE_TOKEN nao configurado no projeto da Vercel.',
+    })
+    return
+  }
+
   const pathname = `sheets/${playerId}.json`
 
   try {
     if (request.method === 'GET') {
       const result = await get(pathname, {
         access: 'private',
+        token: blobToken,
+        useCache: false,
       })
 
       if (!result || result.statusCode !== 200) {
@@ -82,6 +93,7 @@ export default async function handler(request, response) {
         access: 'private',
         allowOverwrite: true,
         contentType: 'application/json',
+        token: blobToken,
       })
 
       response.status(200).json({ ok: true })
@@ -91,6 +103,9 @@ export default async function handler(request, response) {
     response.setHeader('Allow', ['GET', 'PUT'])
     response.status(405).json({ error: 'Metodo nao permitido.' })
   } catch (error) {
-    response.status(500).json({ error: 'Nao foi possivel acessar o armazenamento.' })
+    response.status(500).json({
+      error: 'Nao foi possivel acessar o armazenamento.',
+      detail: error instanceof Error ? error.name : 'Erro desconhecido',
+    })
   }
 }

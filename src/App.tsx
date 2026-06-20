@@ -13,6 +13,8 @@ type Attribute = {
 type Skill = {
   id: string
   label: string
+  type: 'Bélica' | 'Erudita' | 'Hereditária'
+  court?: string
   subtitle: string
   description: string
 }
@@ -43,7 +45,27 @@ type LineageGift = {
   >
 }
 
+type BattleDiscipline = {
+  id: string
+  title: string
+  subtitle: string
+  description: string
+  levels: Record<
+    number,
+    {
+      name: string
+      description: string
+      effect: string
+    }
+  >
+}
+
 type CharacterSkill = {
+  id: string
+  level: number
+}
+
+type CharacterBattleDiscipline = {
   id: string
   level: number
 }
@@ -53,8 +75,11 @@ type Character = {
   court: string
   attributes: Record<AttributeKey, number>
   skills: CharacterSkill[]
+  battleDisciplines: CharacterBattleDiscipline[]
   traits: string[]
   lineageGiftLevel: number
+  secondaryLineageGiftCourt: string
+  secondaryLineageGiftLevel: number
 }
 
 type DerivedAttribute = {
@@ -63,36 +88,44 @@ type DerivedAttribute = {
   formula: string
 }
 
-const INITIAL_XP = 1000
+type SheetPayload = {
+  theme: Theme
+  activeCharacterIndex: number
+  characters: Character[]
+}
+
+const INITIAL_XP = 900
 const MAX_CHARACTERS = 3
+const MAX_STANDARD_SKILLS = 6
 const ADVANTAGE_COST = 100
 const MAX_ADVANTAGES = 3
-const DISADVANTAGE_CREDIT_LIMIT = 2
+const MAX_DISADVANTAGES = 3
+const DISADVANTAGE_CREDIT_LIMIT = 3
 const SHEETS_API_URL = '/api/sheets'
 const PLAYER_ID_STORAGE_KEY = 'acowas-player-id'
 
 const attributeLevelCosts: Record<number, number> = {
-  1: 0,
+  1: 20,
   2: 40,
-  3: 50,
-  4: 60,
-  5: 80,
+  3: 60,
+  4: 80,
+  5: 100,
 }
 
 const skillLevelCosts: Record<number, number> = {
   1: 20,
   2: 40,
-  3: 50,
-  4: 60,
-  5: 80,
+  3: 60,
+  4: 80,
+  5: 100,
 }
 
 const lineageGiftLevelCosts: Record<number, number> = {
   1: 20,
   2: 40,
-  3: 50,
-  4: 60,
-  5: 80,
+  3: 60,
+  4: 80,
+  5: 100,
 }
 
 const courts = [
@@ -148,94 +181,185 @@ const skills: Skill[] = [
   {
     id: 'combate',
     label: 'Combate',
+    type: 'Bélica',
     subtitle: 'Ataque físico',
     description: 'Usada para golpes com lâminas, armas, corpo a corpo, arcos e investidas físicas.',
   },
   {
     id: 'arcano',
     label: 'Arcano',
+    type: 'Bélica',
     subtitle: 'Ataque mágico',
     description: 'Exterioriza poder ofensivo: elementos, energia pura, rajadas, chamas e ataques místicos.',
   },
   {
-    id: 'mentalismo',
-    label: 'Mentalismo',
-    subtitle: 'Manipulação psíquica',
-    description: 'Lê pensamentos, projeta ilusões, confunde sentidos e interfere na mente alheia.',
-  },
-  {
     id: 'constricao',
     label: 'Constrição',
+    type: 'Bélica',
     subtitle: 'Imobilização e restrição',
     description: 'Contém alvos por agarres, submissões, amarras mágicas, sombras, raízes ou paralisia mental.',
   },
   {
     id: 'resistencia',
     label: 'Resistência',
+    type: 'Bélica',
     subtitle: 'Defesa geral',
     description: 'Defesa universal contra agressões físicas, mágicas, psíquicas ou elementais.',
   },
   {
     id: 'egide',
     label: 'Égide',
+    type: 'Bélica',
     subtitle: 'Guarda e proteção',
     description: 'Atrai ataques para si ou protege aliados, funcionando como técnica de guarda do grupo.',
   },
   {
-    id: 'confluencia',
-    label: 'Confluência',
+    id: 'ressonancia',
+    label: 'Ressonância',
+    type: 'Bélica',
     subtitle: 'Transferência de poder',
     description: 'Transfere energia ou dons de linhagem a um aliado por meio de ponte mística temporária.',
   },
   {
     id: 'regeneracao',
     label: 'Regeneração',
+    type: 'Bélica',
     subtitle: 'Cura e restauração',
     description: 'Restaura Vitalidade, neutraliza venenos e estabiliza ferimentos críticos.',
   },
   {
     id: 'intimidacao',
     label: 'Intimidação',
-    subtitle: 'Social soberano',
+    type: 'Erudita',
+    subtitle: 'Ameaça e imposição',
     description: 'Subjuga pela presença, interroga, impõe autoridade e força recuos políticos ou militares.',
   },
   {
-    id: 'magnetismo',
-    label: 'Magnetismo',
-    subtitle: 'Social sedutor',
+    id: 'manipulacao',
+    label: 'Manipulação',
+    type: 'Erudita',
+    subtitle: 'Enganar e seduzir',
     description: 'Persuade, negocia alianças, obtém segredos e conduz interações diplomáticas com charme.',
   },
   {
     id: 'atletismo',
     label: 'Atletismo',
+    type: 'Erudita',
     subtitle: 'Proezas físicas',
     description: 'Executa acrobacias, voos prolongados, escaladas, natação e feitos físicos extremos.',
   },
   {
     id: 'dissimulacao',
     label: 'Dissimulação',
+    type: 'Erudita',
     subtitle: 'Furtividade',
     description: 'Infiltra, oculta traços, escuta conversas e desaparece em meio ao caos.',
   },
   {
     id: 'sobrevivencia',
     label: 'Sobrevivência',
+    type: 'Erudita',
     subtitle: 'Rastreio e natureza',
     description: 'Rastreia criaturas, navega territórios hostis, caça e reconhece perigos naturais.',
   },
   {
     id: 'investigacao',
     label: 'Investigação',
+    type: 'Erudita',
     subtitle: 'Análise e percepção',
     description: 'Analisa cenas, identifica armadilhas, desvenda enigmas e percebe manipulações ocultas.',
   },
   {
     id: 'feiticaria',
     label: 'Feitiçaria',
+    type: 'Erudita',
     subtitle: 'Rituais e objetos',
     description: 'Realiza rituais, interpreta runas, compreende artefatos e neutraliza proteções mágicas.',
   },
+  {
+    id: 'metamorfose',
+    label: 'Metamorfose',
+    type: 'Hereditária',
+    court: 'Corte Primaveril',
+    subtitle: 'Mutação biológica',
+    description: 'Dobra a biologia do sangue para assumir formas bestiais ou animalescas.',
+  },
+  {
+    id: 'navegacao',
+    label: 'Navegação',
+    type: 'Hereditária',
+    court: 'Corte Estival',
+    subtitle: 'Domínio das direções',
+    description: 'Manifesta instinto de direção em águas, rotas terrestres e encruzilhadas.',
+  },
+  {
+    id: 'intriga',
+    label: 'Intriga',
+    type: 'Hereditária',
+    court: 'Corte Outonal',
+    subtitle: 'Discórdia estratégica',
+    description: 'Semeia discórdia e tumulto através de mentiras cirúrgicas e verdades distorcidas.',
+  },
+  {
+    id: 'estagnacao',
+    label: 'Estagnação',
+    type: 'Hereditária',
+    court: 'Corte Invernal',
+    subtitle: 'Inércia mística',
+    description: 'Interrompe fluxo de movimento, tempo ou processos biológicos hostis.',
+  },
+  {
+    id: 'diplomacia',
+    label: 'Diplomacia',
+    type: 'Hereditária',
+    court: 'Corte Crepuscular',
+    subtitle: 'Pacificação de almas',
+    description: 'Projeta harmonia e trégua mística para silenciar hostilidade imediata.',
+  },
+  {
+    id: 'ruptura',
+    label: 'Ruptura',
+    type: 'Hereditária',
+    court: 'Corte Diurna',
+    subtitle: 'Quebra de feitiços',
+    description: 'Identifica, perfura e dissolve ilusões, barreiras rúnicas, encantamentos e maldições.',
+  },
+  {
+    id: 'telepatia',
+    label: 'Telepatia',
+    type: 'Hereditária',
+    court: 'Corte Noturna',
+    subtitle: 'Incursão mental',
+    description: 'Permite entrar em consciências alheias, ler segredos, projetar ilusões ou escravizar vontades vulneráveis.',
+  },
 ]
+
+const skillIdAliases: Record<string, string> = {
+  confluencia: 'ressonancia',
+  magnetismo: 'manipulacao',
+}
+
+function normalizeSkillId(skillId: string) {
+  return skillIdAliases[skillId] ?? skillId
+}
+
+function canUseSkill(skill: Skill, court: string) {
+  return skill.type !== 'Hereditária' || skill.court === court
+}
+
+function formatSkillName(skill: Skill) {
+  return `${skill.type} - ${skill.label}`
+}
+
+function isStandardSkill(skill: Skill) {
+  return skill.type === 'Bélica' || skill.type === 'Erudita'
+}
+
+function formatTraitName(trait: Trait) {
+  const category = trait.subtitle.includes('sistemática') ? 'Sistemática' : 'Interpretativa'
+
+  return `${category} - ${trait.label}`
+}
 
 const traits: Trait[] = [
   {
@@ -263,16 +387,16 @@ const traits: Trait[] = [
     modifier: { attribute: 'canalizacao', value: 2 },
   },
   {
-    id: 'resoluto',
-    label: 'Resoluto',
+    id: 'tenaz',
+    label: 'Tenaz',
     type: 'advantage',
     subtitle: 'Vantagem sistemática',
     description: 'Concede +2 em todos os testes ativos que envolvam Determinação.',
     modifier: { attribute: 'determinacao', value: 2 },
   },
   {
-    id: 'sagaz',
-    label: 'Sagaz',
+    id: 'esperto',
+    label: 'Esperto',
     type: 'advantage',
     subtitle: 'Vantagem sistemática',
     description: 'Concede +2 em todos os testes ativos que envolvam Astúcia.',
@@ -301,32 +425,18 @@ const traits: Trait[] = [
     description: 'Permite controle mágico refinado, escudos, ferramentas místicas e construções de luz.',
   },
   {
-    id: 'sentidos-predador',
-    label: 'Sentidos de Predador',
-    type: 'advantage',
-    subtitle: 'Vantagem interpretativa',
-    description: 'Ignora escuridão, rastreia por odores e detecta sinais fisiológicos sutis.',
-  },
-  {
-    id: 'mestre-ilusoes',
-    label: 'Mestre de Ilusões',
-    type: 'advantage',
-    subtitle: 'Vantagem interpretativa',
-    description: 'Mantém disfarce visual passivo sobre si ou pequenos objetos.',
-  },
-  {
     id: 'voz-autoridade',
-    label: 'Voz de Autoridade',
+    label: 'Voz de Liderança',
     type: 'advantage',
     subtitle: 'Vantagem interpretativa',
-    description: 'Garante presença de comando e faz NPCs inferiores levarem sua palavra a sério.',
+    description: 'Emana clareza inspiradora que organiza aliados em combate e torna diretrizes difíceis de ignorar.',
   },
   {
-    id: 'vinculo-territorial',
-    label: 'Vínculo Territorial',
+    id: 'veu-ilusoes',
+    label: 'Véu de Ilusões',
     type: 'advantage',
     subtitle: 'Vantagem interpretativa',
-    description: 'Recebe presságios quando seu território protegido é ameaçado.',
+    description: 'Oculta misticamente objetos portados ou extensões físicas específicas, como armas ou asas.',
   },
   {
     id: 'muralha-mental',
@@ -343,24 +453,66 @@ const traits: Trait[] = [
     description: 'Cria comunicação telepática privada e percepção emocional do parceiro.',
   },
   {
-    id: 'debil',
-    label: 'Débil',
+    id: 'reputacao-ilibada',
+    label: 'Reputação Ilibada',
+    type: 'advantage',
+    subtitle: 'Vantagem interpretativa',
+    description: 'O nome e os feitos do personagem abrem portas e garantem o direito de ser ouvido em impasses diplomáticos.',
+  },
+  {
+    id: 'opulencia-material',
+    label: 'Opulência Material',
+    type: 'advantage',
+    subtitle: 'Vantagem interpretativa',
+    description: 'Permite acesso a vastas reservas financeiras, privilégios da elite e recursos luxuosos.',
+  },
+  {
+    id: 'erudito-seculos',
+    label: 'Erudito dos Séculos',
+    type: 'advantage',
+    subtitle: 'Vantagem interpretativa',
+    description: 'Concede autoridade acadêmica sobre línguas antigas, artefatos perdidos e itens de poder.',
+  },
+  {
+    id: 'aliado-criaturas',
+    label: 'Aliado das Criaturas',
+    type: 'advantage',
+    subtitle: 'Vantagem interpretativa',
+    description: 'Garante afinidade com animais selvagens, seres do Meio e feéricos inferiores.',
+  },
+  {
+    id: 'memoria-implacavel',
+    label: 'Memória Implacável',
+    type: 'advantage',
+    subtitle: 'Vantagem interpretativa',
+    description: 'Permite recordar acontecimentos, mapas e livros vistos anteriormente com detalhes perfeitos.',
+  },
+  {
+    id: 'vinculo-territorial',
+    label: 'Vínculo Territorial',
+    type: 'advantage',
+    subtitle: 'Vantagem interpretativa',
+    description: 'Permite sentir invasões ou corrupções territoriais através da própria essência ligada ao solo da Corte.',
+  },
+  {
+    id: 'fragil',
+    label: 'Frágil',
     type: 'disadvantage',
     subtitle: 'Desvantagem sistemática',
     description: 'Impõe -2 em todos os testes que envolvam Vigor.',
     modifier: { attribute: 'vigor', value: -2 },
   },
   {
-    id: 'vagaroso',
-    label: 'Vagaroso',
+    id: 'lento',
+    label: 'Lento',
     type: 'disadvantage',
     subtitle: 'Desvantagem sistemática',
     description: 'Impõe -2 em todos os testes que envolvam Agilidade.',
     modifier: { attribute: 'agilidade', value: -2 },
   },
   {
-    id: 'minguante',
-    label: 'Minguante',
+    id: 'inabil',
+    label: 'Inábil',
     type: 'disadvantage',
     subtitle: 'Desvantagem sistemática',
     description: 'Impõe -2 em todos os testes que envolvam Canalização.',
@@ -392,10 +544,17 @@ const traits: Trait[] = [
   },
   {
     id: 'ancoragem-terrena',
-    label: 'Ancoragem Terrena',
+    label: 'Ancoragem',
     type: 'disadvantage',
     subtitle: 'Desvantagem interpretativa',
     description: 'Impede o uso de Atravessar, exigindo deslocamento físico.',
+  },
+  {
+    id: 'eco-parceria',
+    label: 'Eco de Parceria',
+    type: 'disadvantage',
+    subtitle: 'Desvantagem interpretativa',
+    description: 'Um laço de parceria interrompido ou jamais concretizado drena a determinação em momentos críticos.',
   },
   {
     id: 'magia-indomita',
@@ -405,11 +564,11 @@ const traits: Trait[] = [
     description: 'Torna usos utilitários da magia instáveis e perigosos em caso de falha.',
   },
   {
-    id: 'alergia-freixo',
-    label: 'Alergia ao Freixo',
+    id: 'aflicoes-alma',
+    label: 'Aflições da Alma',
     type: 'disadvantage',
     subtitle: 'Desvantagem interpretativa',
-    description: 'Freixo suprime cura e regeneração, deixando o personagem vulnerável.',
+    description: 'Traumas e ruínas internas podem surgir como surto, paralisia ou pânico diante de gatilhos específicos.',
   },
   {
     id: 'tatuagem-contrato',
@@ -419,257 +578,530 @@ const traits: Trait[] = [
     description: 'Permite que o detentor do contrato force ações ou puna resistência.',
   },
   {
-    id: 'instabilidade-magica',
-    label: 'Instabilidade Mágica',
+    id: 'nevoa-oblivio',
+    label: 'Névoa do Oblívio',
     type: 'disadvantage',
     subtitle: 'Desvantagem interpretativa',
-    description: 'Faz a magia escapar involuntariamente sob estresse.',
+    description: 'Recordações vitais e locais visitados se desintegram em lapsos difíceis de resgatar.',
+  },
+  {
+    id: 'mente-indefesa',
+    label: 'Mente Indefesa',
+    type: 'disadvantage',
+    subtitle: 'Desvantagem interpretativa',
+    description: 'A consciência não possui barreiras protetoras mínimas contra leitura mental e escrutínio imediato.',
+  },
+  {
+    id: 'infamia-anunciada',
+    label: 'Infâmia Anunciada',
+    type: 'disadvantage',
+    subtitle: 'Desvantagem interpretativa',
+    description: 'Uma reputação nefasta precede o personagem e gera suspeita, hostilidade ou preconceito.',
+  },
+  {
+    id: 'fardo-escassez',
+    label: 'Fardo da Escassez',
+    type: 'disadvantage',
+    subtitle: 'Desvantagem interpretativa',
+    description: 'A pobreza extrema torna recursos básicos e acessos materiais um desafio constante.',
+  },
+  {
+    id: 'insipiencia-seculos',
+    label: 'Insipiência dos Séculos',
+    type: 'disadvantage',
+    subtitle: 'Desvantagem interpretativa',
+    description: 'A falta de conhecimento místico dificulta runas, línguas antigas e artefatos perdidos.',
+  },
+  {
+    id: 'carrasco-bestas',
+    label: 'Carrasco das Bestas',
+    type: 'disadvantage',
+    subtitle: 'Desvantagem interpretativa',
+    description: 'Animais selvagens, seres do Meio e feéricos inferiores tendem a reagir com inquietação ou hostilidade.',
   },
   {
     id: 'cicatriz-territorial',
     label: 'Cicatriz Territorial',
     type: 'disadvantage',
     subtitle: 'Desvantagem interpretativa',
-    description: 'Causa agonia quando o território de origem é invadido ou corrompido.',
-  },
-  {
-    id: 'assombrado-bogge',
-    label: 'Assombrado pelo Bogge',
-    type: 'disadvantage',
-    subtitle: 'Desvantagem interpretativa',
-    description: 'Falhas críticas podem manifestar o Bogge como ameaça narrativa imediata.',
-  },
-  {
-    id: 'eco-parceria',
-    label: 'Eco de Parceria',
-    type: 'disadvantage',
-    subtitle: 'Desvantagem interpretativa',
-    description: 'Um laço perdido causa melancolia, dor e distração em momentos críticos.',
+    description: 'A alma sente cada ferida infligida à terra da Corte como dor nos próprios ossos.',
   },
 ]
+
+const traitIdAliases: Record<string, string> = {
+  'alergia-freixo': 'aflicoes-alma',
+  'assombrado-bogge': 'infamia-anunciada',
+  debil: 'fragil',
+  'instabilidade-magica': 'nevoa-oblivio',
+  'mestre-ilusoes': 'veu-ilusoes',
+  minguante: 'inabil',
+  resoluto: 'tenaz',
+  sagaz: 'esperto',
+  'sentidos-predador': 'aliado-criaturas',
+  vagaroso: 'lento',
+  'voz-autoridade': 'voz-autoridade',
+}
+
+function normalizeTraitId(traitId: string) {
+  return traitIdAliases[traitId] ?? traitId
+}
 
 const lineageGifts: LineageGift[] = [
   {
     court: 'Corte Primaveril',
     title: 'Dom da Mutação e do Crescimento',
-    description: 'Poder de raízes, couraça viva, instinto predatório e florescimento vital.',
+    description: 'Herança primitiva de mutação biológica, crescimento vital, instinto predatório e autoridade da natureza.',
     levels: {
       1: {
         name: 'Vigor da Floresta',
         description: 'O sangue pulsa com a seiva de árvores ancestrais, endurecendo as fibras musculares.',
-        effect: '+1 em Combate ou +1 em Vigor.',
+        effect: '+1 em Metamorfose OU +1 em Combate.',
       },
       2: {
         name: 'Florescer Vital',
-        description: 'A vida irrompe onde o feérico pisa, fechando feridas ou envolvendo o personagem em magnetismo natural.',
-        effect: '+20 de Vitalidade ou +2 em Encanto.',
+        description: 'A vida irrompe onde o personagem pisa, fechando feridas com tecidos vegetais temporários e concedendo maior rapidez.',
+        effect: '+30 de Vitalidade OU +2 em Agilidade.',
       },
       3: {
         name: 'Raízes Constritoras',
-        description: 'O solo atende ao comando, fazendo brotar amarras vegetais e espinhos que imobilizam e perfuram o alvo.',
-        effect: '+30 de Dano de Constrição ou +3 em Sobrevivência.',
+        description: 'O solo atende ao comando do herdeiro da linhagem, modificando mais seu corpo e ampliando seus sentidos de predador.',
+        effect: '+3 em Metamorfose OU +3 em Investigação.',
       },
       4: {
-        name: 'Garra da Besta',
-        description: 'O personagem inicia uma transição física onde garras e instintos de predador alfa assumem o controle total.',
-        effect: '+4 em Letalidade ou +4 em Sobrevivência.',
+        name: 'Garras da Besta',
+        description: 'O feérico inicia uma transição física agressiva e manifesta autoridade física como um baluarte no campo de batalha.',
+        effect: '+40 de Dano Direto OU +4 em Égide.',
       },
       5: {
         name: 'Avatar da Natureza',
-        description: 'O imortal manifesta a autoridade de um Grão-Senhor, tornando-se uma força física ou social imparável perante a criação.',
-        effect: '+5 em Vigor ou +5 em Encanto.',
+        description: 'O imortal manifesta a autoridade de um Grão-Senhor da Primavera, alcançando o ápice da potência física.',
+        effect: '+5 em Metamorfose OU +5 em Vigor.',
       },
     },
   },
   {
     court: 'Corte Estival',
     title: 'Dom das Marés e das Tempestades',
-    description: 'Magia oceânica de cura, fluidez, pressão abissal e fúria tempestuosa.',
+    description: 'Força das marés, tempestades, proteção líquida e pressão abissal.',
     levels: {
       1: {
         name: 'Impulso das Ondas',
-        description: 'O feérico sintoniza seus movimentos com o fluxo das marés, tornando suas ações fluidas e leves.',
-        effect: '+1 em Agilidade ou +1 em Atletismo.',
+        description: 'O feérico sintoniza seus movimentos com o fluxo das águas, mantendo o instinto de direção mesmo em meio ao caos.',
+        effect: '+1 em Navegação OU +1 em Regeneração.',
       },
       2: {
         name: 'Maré Revigorante',
-        description: 'A umidade ao redor torna-se um bálsamo que limpa feridas e remove o cansaço imediato.',
-        effect: '+20 de Vitalidade ou +2 em Agilidade.',
+        description: 'A umidade ao redor torna-se um escudo líquido, refletindo o vigor dos batedores navais.',
+        effect: 'Proteger 2 Aliados OU +2 em Vigor.',
       },
       3: {
         name: 'Pressão Abissal',
-        description: 'O personagem dispara jatos de água sólida com o peso das fossas oceânicas, capaz de quebrar ossos.',
-        effect: '+30 de Dano Arcano ou +3 em Atletismo.',
+        description: 'O personagem canaliza o peso das fossas oceânicas em suas ações e domina o campo de batalha marítimo ou terrestre.',
+        effect: '+3 em Navegação OU +3 em Atletismo.',
       },
       4: {
         name: 'Fúria do Mar',
-        description: 'A eletricidade que precede a tempestade é convocada para açoitar múltiplos adversários simultaneamente.',
-        effect: 'atinge até 3 alvos com Arcano ou +4 em Canalização.',
+        description: 'O feérico convoca a eletricidade que precede a tempestade, saturando o ambiente com ataques mágicos.',
+        effect: 'Atacar 4 Alvos OU +4 em Arcano.',
       },
       5: {
         name: 'Tsunami de Poder',
-        description: 'Uma massa colossal de energia oceânica varre a cena, alterando a paisagem e obliterando qualquer oposição.',
-        effect: '+50 de Dano Arcano ou +5 em Canalização.',
+        description: 'O personagem manifesta a autoridade de um Grão-Senhor do Verão sobre todas as marés.',
+        effect: '+5 em Navegação OU +5 em Canalização.',
       },
     },
   },
   {
     court: 'Corte Outonal',
     title: 'Dom do Fogo e da Fúria',
-    description: 'Chamas de comando, ameaça, explosão pirocinética e fúria purificadora.',
+    description: 'Fogo estratégico, intriga, comando soberano e agressividade tática.',
     levels: {
       1: {
         name: 'Presença Incendiária',
-        description: 'O feérico emana um calor latente que faz o ar vibrar, impondo uma ameaça silenciosa ao ambiente.',
-        effect: '+1 em Intimidação ou +1 em Canalização.',
+        description: 'O feérico emana um calor latente que faz o ar vibrar, tecendo intrigas ou assumindo guarda vigilante.',
+        effect: '+1 em Intriga OU +1 em Égide.',
       },
       2: {
         name: 'Chamas de Batalha',
-        description: 'O fogo da linhagem flui para as lâminas, garantindo que cada golpe cauterize e exploda em brasas.',
-        effect: '+2 em Letalidade ou +2 em Combate.',
+        description: 'O fogo da linhagem flui para as palavras e para o espírito, despertando magnetismo social e ímpeto de iniciativa.',
+        effect: '+5 de Iniciativa OU +2 em Encanto.',
       },
       3: {
         name: 'Cinzas ao Vento',
-        description: 'Uma explosão pirocinética devora o oxigênio ao redor, forçando a submissão imediata dos sobreviventes.',
-        effect: '+30 de Dano Arcano ou +3 em Intimidação.',
+        description: 'Uma explosão de autoridade e calor quebra a vontade inimiga e manipula a percepção durante o tumulto social.',
+        effect: '+3 em Intriga OU +3 em Intimidação.',
       },
       4: {
         name: 'Inferno de Folhas',
-        description: 'O personagem torna-se o centro de um vórtice ardente que ataca em todas as direções como um vendaval.',
-        effect: 'atinge até 3 alvos com Arcano ou +4 em Combate.',
+        description: 'O personagem torna-se o centro de um vórtice ardente e letal, buscando encerrar o conflito com precisão.',
+        effect: '+6 em Letalidade OU +4 em Combate.',
       },
       5: {
         name: 'Labareda de Sangue',
-        description: 'A fúria atinge o ápice místico onde o fogo torna-se branco, consumindo a própria essência vital do adversário.',
-        effect: '+50 de Dano Arcano ou +5 em Combate.',
+        description: 'A fúria atinge o ápice místico, manifestando a autoridade de um Grão-Senhor com fluidez letal.',
+        effect: '+5 em Intriga OU +5 em Agilidade.',
       },
     },
   },
   {
     court: 'Corte Invernal',
     title: 'Dom do Gelo e da Estagnação',
-    description: 'Frio absoluto, couraça de gelo, paralisia, lâminas de neve e estagnação.',
+    description: 'Gelo absoluto, inércia mística, sobrevivência nas neves e resistência inabalável.',
     levels: {
       1: {
         name: 'Resiliência Gélida',
-        description: 'Uma camada de geada emana dos poros, agindo como uma couraça que amortece impactos e anestesia a dor.',
-        effect: '+1 em Resistência ou +1 em Vigor.',
+        description: 'Uma camada de geada emana dos poros para estagnar ameaças próximas ou imobilizar inimigos.',
+        effect: '+1 em Estagnação OU +1 em Constrição.',
       },
       2: {
         name: 'Prisão de Gelo',
-        description: 'A umidade ao redor condensa-se instantaneamente para imobilizar os membros do oponente ou disparar projéteis de gelo.',
-        effect: '+20 de Dano Arcano ou +2 em Constrição.',
+        description: 'A umidade ao redor se condensa para drenar a vitalidade inimiga ou potencializar a canalização mística.',
+        effect: '+20 de Dano Direto OU +2 em Canalização.',
       },
       3: {
         name: 'Coração de Rocha',
-        description: 'O sangue corre lento como seiva congelada, conferindo uma força física e mental inabalável.',
-        effect: '+3 em Vigor ou +3 em Determinação.',
+        description: 'O feérico mergulha em inércia mágica, tornando a alma inexpugnável e aguçando seus instintos de sobrevivência.',
+        effect: '+3 em Estagnação OU +3 em Sobrevivência.',
       },
       4: {
         name: 'Vento Cortante',
-        description: 'Uma nevasca envolve as mãos do feérico, transformando cada golpe em uma lâmina capaz de estilhaçar aço.',
-        effect: '+4 em Letalidade ou +4 em Constrição.',
+        description: 'Uma nevasca envolve o guerreiro, projetando a si próprio e seus aliados como uma geleira inquebrável.',
+        effect: 'Proteger 4 Aliados OU +4 em Resistência.',
       },
       5: {
         name: 'Inverno Eterno',
-        description: 'O personagem manifesta uma zona de frio absoluto onde o movimento cessa e a vida se interrompe sob seu comando.',
-        effect: '+50 de Dano Arcano ou +5 em Resistência.',
+        description: 'O personagem manifesta a soberania de um Grão-Senhor do Norte e a determinação que comanda o silêncio.',
+        effect: '+5 em Estagnação OU +5 em Determinação.',
       },
     },
   },
   {
     court: 'Corte Diurna',
     title: 'Dom da Luz e da Verdade',
-    description: 'Luz solar, revelação, purificação, clareza intelectual e restauração.',
+    description: 'Luz solar, verdade, quebra de feitiços, clareza mental e revelação.',
     levels: {
       1: {
         name: 'Luz da Verdade',
-        description: 'O feérico emana um brilho que limpa o ar e aguça os sentidos para enxergar além das aparências comuns.',
-        effect: '+1 em Investigação ou +1 em Astúcia.',
+        description: 'O feérico emana um brilho interior que limpa incertezas e revela fissuras em arquiteturas mágicas.',
+        effect: '+1 em Ruptura OU +1 em Resistência.',
       },
       2: {
-        name: 'Fulgor Vital',
-        description: 'O calor do sol flui para as veias, acelerando a biologia imortal para fechar feridas ou repelir agressões.',
-        effect: '+20 de Vitalidade ou +2 em Resistência.',
+        name: 'Veredito Solar',
+        description: 'A luz da linhagem revela o nervo frágil da batalha ou ancora a mente contra qualquer pânico.',
+        effect: '+3 de Letalidade OU +2 de Determinação.',
       },
       3: {
-        name: 'Helianto Devastador',
-        description: 'O poder solar é focado como uma lente, incinerando o que toca ou potencializando estudos e rituais complexos.',
-        effect: '+30 de Dano Arcano ou +3 em Feitiçaria.',
+        name: 'Desvendar Místico',
+        description: 'O personagem canaliza a erudição do sol para desmantelar encantamentos ou manipular objetos de poder.',
+        effect: '+3 em Ruptura OU +3 em Feitiçaria.',
       },
       4: {
-        name: 'Veredito Solar',
-        description: 'A mente alcança clareza absoluta, permitindo identificar falhas fatais no espírito e na armadura dos adversários.',
-        effect: '+4 em Letalidade ou +4 em Astúcia.',
+        name: 'Confluência Solar',
+        description: 'O feérico torna-se um reservatório de energia, cedendo vigor místico a aliados ou sustentando o próprio fôlego.',
+        effect: '+40 de Mana e Stamina OU +4 em Ressonância.',
       },
       5: {
-        name: 'Purificação Suprema',
-        description: 'O imortal torna-se um condutor vivo para o sol, gerando uma explosão que restaura aliados e reduz sombras a cinzas.',
-        effect: '+50 de Dano Arcano ou +5 em Regeneração.',
+        name: 'Sabedoria do Quebrador',
+        description: 'O imortal manifesta a autoridade de um Grão-Senhor da Diurna, desfazendo magias lendárias com vontade soberana.',
+        effect: '+5 em Ruptura OU +5 em Astúcia.',
       },
     },
   },
   {
     court: 'Corte Crepuscular',
-    title: 'Dom da Transformação e da Renovação',
-    description: 'Magia de transição, cura, harmonia, barreiras de aurora e proteção.',
+    title: 'Dom da Renovação e da Pacificação',
+    description: 'Magia de cura, transição, diplomacia, pacificação e restauração.',
     levels: {
       1: {
         name: 'Canto da Alvorada',
-        description: 'Uma melodia suave ressoa no sangue, harmonizando o ritmo do grupo e facilitando a diplomacia elegante.',
-        effect: '+1 em Sinergia ou +1 em Encanto.',
+        description: 'Uma ressonância harmônica emana do sangue, criando elos de poder ou pacificando almas.',
+        effect: '+1 em Diplomacia OU +1 em Ressonância.',
       },
       2: {
-        name: 'Ressonância Suave',
-        description: 'Uma onda de luz rosada acalma as dores físicas ou ancora a presença de um guardião resoluto.',
-        effect: '+20 de Vitalidade ou +2 em Égide.',
+        name: 'Fôlego do Alvorecer',
+        description: 'A umidade ao redor se condensa para renovar reservas vitais ou fortalecer o vigor do feérico.',
+        effect: '+20 de Mana e Stamina OU +2 em Vigor.',
       },
       3: {
-        name: 'Barreira de Aurora',
-        description: 'A luz do horizonte é tecida em uma cúpula translúcida que absorve impactos e purifica intenções hostis.',
-        effect: '+3 em Resistência ou +3 em Sinergia.',
+        name: 'Soberania Diplomática',
+        description: 'O personagem projeta o equilíbrio das nuvens do amanhecer, convencendo aliados ou subjugando vontades.',
+        effect: '+3 em Diplomacia OU +3 em Manipulação.',
       },
       4: {
-        name: 'Alento Coletivo',
-        description: 'O feérico libera partículas de luz que restauram o ânimo de legiões ou dominam salões inteiros com benevolência.',
-        effect: 'cura +20 Vitalidade em até 3 aliados ou +4 em Encanto.',
+        name: 'Orvalho Restaurador',
+        description: 'O poder atinge vitacinese plena, restaurando corpos quase destruídos ou protegendo aliados.',
+        effect: '+60 de Vitalidade OU +4 em Regeneração.',
       },
       5: {
-        name: 'Escudo do Destino',
-        description: 'O personagem nega a derrota através de um clarão magnífico que restaura corpos destroçados e cria um baluarte invencível.',
-        effect: '+75 de Vitalidade ou +5 em Égide.',
+        name: 'Aura do Pacifista',
+        description: 'O imortal manifesta a soberania de um Grão-Senhor da Crepuscular, impondo calma absoluta sobre o caos.',
+        effect: '+5 em Diplomacia OU +5 em Encanto.',
       },
     },
   },
   {
     court: 'Corte Noturna',
     title: 'Dom das Sombras e das Estrelas',
-    description: 'Sombras vivas, luz fria, domínio mental, chicotes noturnos e medo soberano.',
+    description: 'Sombras vivas, estrelas, telepatia, segredos ocultos e soberania dos sonhos.',
     levels: {
       1: {
-        name: 'Véu de Sombras',
-        description: 'A escuridão ao redor torna-se densa e consciente, agindo como camuflagem perfeita ou impulso para o movimento.',
-        effect: '+1 em Dissimulação ou +1 em Agilidade.',
+        name: 'Sussurros da Noite',
+        description: 'As sombras se tornam extensões da consciência, tocando mentes próximas ou exteriorizando poder em pulsos de energia.',
+        effect: '+1 em Telepatia OU +1 em Resistência.',
       },
       2: {
         name: 'Estilhaços de Estrelas',
-        description: 'O personagem materializa luz fria em lâminas de energia pura ou a utiliza para perfurar mentiras e ilusões.',
-        effect: 'atinge até 2 alvos com Arcano ou +2 em Investigação.',
+        description: 'O personagem manifesta a agudeza tática dos astros, executando golpes simultâneos ou identificando segredos.',
+        effect: 'Atacar 2 Alvos OU +2 de Astúcia.',
       },
       3: {
         name: 'Invasão Obscura',
-        description: 'O feérico projeta sua consciência ou sombras para dentro do inimigo, causando agonia física e domínio mental profundo.',
-        effect: '+30 de Dano Arcano ou +3 em Mentalismo.',
+        description: 'O dom dos daemati ganha força agressiva, violando defesas mentais ou movendo o feérico como um fantasma.',
+        effect: '+3 em Telepatia OU +3 em Dissimulação.',
       },
       4: {
-        name: 'Chicotes Noturnos',
-        description: 'Trevas tangíveis emergem das mãos do imortal para dominar o campo de batalha com uma velocidade que desafia a visão.',
-        effect: 'atinge até 3 alvos com Arcano ou +4 em Agilidade.',
+        name: 'Velocidade do Vento',
+        description: 'O personagem canaliza celeridade e controle das raízes illyrianas, restringindo a reação inimiga.',
+        effect: '+10 em Iniciativa OU +4 em Constrição.',
       },
       5: {
-        name: 'Soberania do Medo',
-        description: 'O personagem manifesta a aura esmagadora de um Grão-Senhor, onde o som desaparece e a realidade se curva à sua vontade.',
-        effect: '+50 de Dano Arcano ou +5 em Arcano.',
+        name: 'Noite Triunfante',
+        description: 'O imortal evoca a soberania de um Grão-Senhor da Noite, escravizando vontades ou canalizando magia eterna.',
+        effect: '+5 em Telepatia OU +5 em Canalização.',
+      },
+    },
+  },
+]
+
+const battleDisciplines: BattleDiscipline[] = [
+  {
+    id: 'virtude-mortifera',
+    title: 'Virtude Mortífera',
+    subtitle: 'A disciplina do aço e da precisão',
+    description: 'Refinamento marcial de quem faz da lâmina uma extensão orgânica da própria vontade imortal.',
+    levels: {
+      1: {
+        name: 'Postura de Ferro',
+        description: 'O guerreiro estabiliza seu centro de gravidade e prepara a arma para o impacto.',
+        effect: '+1 em Combate.',
+      },
+      2: {
+        name: 'Fúria Múltipla',
+        description: 'A velocidade do ataque desafia a percepção comum, fazendo a lâmina ocupar dois lugares ao mesmo tempo.',
+        effect: 'Atacar 2 Alvos.',
+      },
+      3: {
+        name: 'Fluidez do Passo',
+        description: 'Cada estocada e paragem é executada com a perfeição de séculos de prática constante.',
+        effect: '+3 em Combate.',
+      },
+      4: {
+        name: 'Frenesi de Lâminas',
+        description: 'O combatente torna-se um borrão de prata e sombras, saturando a defesa de múltiplos inimigos.',
+        effect: 'Atacar 4 alvos.',
+      },
+      5: {
+        name: 'Maestria da Dança',
+        description: 'O guerreiro flui pelo ambiente como o vento, tornando-se uma silhueta inalcançável e letal.',
+        effect: '+5 em Combate.',
+      },
+    },
+  },
+  {
+    id: 'fluxo-mistico',
+    title: 'Fluxo Místico',
+    subtitle: 'A disciplina do foco e da centelha',
+    description: 'Controle técnico sobre a exteriorização do poder bruto que ferve no sangue feérico.',
+    levels: {
+      1: {
+        name: 'Foco da Vontade',
+        description: 'O praticante silencia as emoções para que a magia flua como um rio controlado.',
+        effect: '+1 em Arcano.',
+      },
+      2: {
+        name: 'Pulso de Energia',
+        description: 'Uma pequena porção de poder é condensada em um impacto concentrado que perfura defesas comuns.',
+        effect: '+20 de Dano Direto.',
+      },
+      3: {
+        name: 'Fluidez Técnica',
+        description: 'A herança do sangue é moldada com agudeza tática, minimizando desperdício de energia vital.',
+        effect: '+3 em Arcano.',
+      },
+      4: {
+        name: 'Detonação Concentrada',
+        description: 'O guerreiro arcano localiza a falha na armadura mística do alvo e descarrega energia concentrada.',
+        effect: '+40 de Dano Direto.',
+      },
+      5: {
+        name: 'Soberania Mística',
+        description: 'O imortal torna-se um condutor perfeito para o Caldeirão.',
+        effect: '+5 em Arcano.',
+      },
+    },
+  },
+  {
+    id: 'cerco-estrategico',
+    title: 'Cerco Estratégico',
+    subtitle: 'A disciplina do ritmo e da restrição',
+    description: 'Arte de ditar o ritmo da batalha e restringir o inimigo antes do golpe final.',
+    levels: {
+      1: {
+        name: 'Cálculo de Distância',
+        description: 'O guerreiro mapeia o campo de batalha para identificar movimentos vulneráveis a bloqueios.',
+        effect: '+1 em Constrição.',
+      },
+      2: {
+        name: 'Lampejo de Reação',
+        description: 'A percepção tática antecipa o movimento hostil no instante necessário para frustrar o ataque.',
+        effect: '+5 em Iniciativa.',
+      },
+      3: {
+        name: 'Cerco de Aço',
+        description: 'Cada movimento do guerreiro parece fechar uma rota de fuga do alvo.',
+        effect: '+3 em Constrição.',
+      },
+      4: {
+        name: 'Antecipação do General',
+        description: 'O intelecto estratégico processa a posição de todos na batalha e dita os termos do conflito.',
+        effect: '+10 em Iniciativa.',
+      },
+      5: {
+        name: 'Maestria da Imobilização',
+        description: 'O oponente é neutralizado por força, técnica e pressão psicológica perfeitamente combinadas.',
+        effect: '+5 em Constrição.',
+      },
+    },
+  },
+  {
+    id: 'couraca-ferrea',
+    title: 'Couraça Férrea',
+    subtitle: 'A disciplina da fibra e da resiliência',
+    description: 'Disciplina defensiva de quem transforma o próprio corpo em uma bigorna de resistência.',
+    levels: {
+      1: {
+        name: 'Blindagem da Alma',
+        description: 'O guerreiro prepara o corpo para absorver impactos através de vontade e respiração controlada.',
+        effect: '+1 em Resistência.',
+      },
+      2: {
+        name: 'Fenda na Armadura',
+        description: 'Durante a defesa, o mestre localiza uma brecha milimétrica para um golpe preciso.',
+        effect: '+3 em Letalidade.',
+      },
+      3: {
+        name: 'Resiliência de Mestre',
+        description: 'A harmonia entre reflexo corporal e durabilidade biológica alcança um novo patamar.',
+        effect: '+3 em Resistência.',
+      },
+      4: {
+        name: 'Ponto de Ruptura',
+        description: 'O guerreiro converte a defesa no instante exato para uma sentença de morte.',
+        effect: '+6 em Letalidade.',
+      },
+      5: {
+        name: 'Guerreiro Inexpugnável',
+        description: 'O combatente torna-se uma montanha inamovível contra a qual exércitos e magia se quebram.',
+        effect: '+5 em Resistência.',
+      },
+    },
+  },
+  {
+    id: 'escolta-tatica',
+    title: 'Escolta Tática',
+    subtitle: 'A disciplina da proteção e da guarda',
+    description: 'Domínio do sacrifício e do dever para proteger aliados vulneráveis com autoridade tática.',
+    levels: {
+      1: {
+        name: 'Postura de Sentinela',
+        description: 'O guerreiro cobre brechas de defesa e firma sua posição como âncora da formação.',
+        effect: '+1 em Égide.',
+      },
+      2: {
+        name: 'Baluarte da Unidade',
+        description: 'O combatente expande seu raio de proteção e monitora múltiplos flancos.',
+        effect: 'Proteger 2 Aliados.',
+      },
+      3: {
+        name: 'Escudo Intransponível',
+        description: 'O bloqueio distribui o impacto das armas inimigas pela estrutura do guerreiro.',
+        effect: '+3 em Égide.',
+      },
+      4: {
+        name: 'Aura de Proteção',
+        description: 'O mestre se interpõe em uma área vasta, garantindo a integridade do grupo.',
+        effect: 'Proteger 4 Aliados.',
+      },
+      5: {
+        name: 'Soberania do Guardião',
+        description: 'O guerreiro encarna o juramento de defesa e impede que golpes transponham sua linha.',
+        effect: '+5 em Égide.',
+      },
+    },
+  },
+  {
+    id: 'sinergia-marcial',
+    title: 'Sinergia Marcial',
+    subtitle: 'A disciplina da ponte ressonante',
+    description: 'Habilidade prática de entrelaçar correntes de poder místico entre imortais em batalha.',
+    levels: {
+      1: {
+        name: 'Harmonia do Fluxo',
+        description: 'O praticante reduz desperdício energético e cria elos iniciais de transferência.',
+        effect: '+1 em Ressonância.',
+      },
+      2: {
+        name: 'Núcleo Estabilizado',
+        description: 'Exercícios de meditação e controle muscular criam reservatórios extras de vigor.',
+        effect: '+20 de Mana e Stamina.',
+      },
+      3: {
+        name: 'Ponte Mística',
+        description: 'A essência vital pode ser cedida ou recebida com precisão cirúrgica.',
+        effect: '+3 em Ressonância.',
+      },
+      4: {
+        name: 'Força das Eras',
+        description: 'O corpo opera como um condutor capaz de suportar cargas imensas de esforço prolongado.',
+        effect: '+40 de Mana e Stamina.',
+      },
+      5: {
+        name: 'Mestre da Sinfonia',
+        description: 'O guerreiro controla perfeitamente as marés da alma e sustenta a batalha coletivamente.',
+        effect: '+5 em Ressonância.',
+      },
+    },
+  },
+  {
+    id: 'sopro-restaurador',
+    title: 'Sopro Restaurador',
+    subtitle: 'A disciplina da cura e da disposição',
+    description: 'Técnica de manipulação da energia vital para preservar e restaurar a estrutura biológica.',
+    levels: {
+      1: {
+        name: 'Toque Restaurador',
+        description: 'O praticante domina primeiros socorros místicos e vitacinese básica.',
+        effect: '+1 em Regeneração.',
+      },
+      2: {
+        name: 'Sopro de Renovação',
+        description: 'O combatente impulsiona a fibra biológica própria ou de um aliado.',
+        effect: '+30 de Vitalidade.',
+      },
+      3: {
+        name: 'Oração Vital',
+        description: 'Processos de restauração complexos podem ser realizados sob estresse de batalha.',
+        effect: '+3 em Regeneração.',
+      },
+      4: {
+        name: 'Vigor do Horizonte',
+        description: 'O mestre satura células com uma torrente restauradora massiva.',
+        effect: '+60 de Vitalidade.',
+      },
+      5: {
+        name: 'Zênite da Vida',
+        description: 'O mestre torna-se um reservatório vivo de cura e reorganiza a integridade da carne.',
+        effect: '+5 em Regeneração.',
       },
     },
   },
@@ -688,8 +1120,11 @@ function createCharacter(index: number): Character {
       encanto: 1,
     },
     skills: [],
+    battleDisciplines: [],
     traits: [],
     lineageGiftLevel: 0,
+    secondaryLineageGiftCourt: '',
+    secondaryLineageGiftLevel: 0,
   }
 }
 
@@ -711,10 +1146,17 @@ function getStoredPlayerId() {
 
 function normalizeCharacter(character: Partial<Character>, index: number): Character {
   const fallback = createCharacter(index)
+  const court = typeof character.court === 'string' ? character.court : fallback.court
+  const secondaryLineageGiftCourt =
+    typeof character.secondaryLineageGiftCourt === 'string' &&
+    character.secondaryLineageGiftCourt !== court &&
+    lineageGifts.some((gift) => gift.court === character.secondaryLineageGiftCourt)
+      ? character.secondaryLineageGiftCourt
+      : ''
 
   return {
     name: typeof character.name === 'string' ? character.name : fallback.name,
-    court: typeof character.court === 'string' ? character.court : fallback.court,
+    court,
     attributes: {
       vigor: clampLevel(Number(character.attributes?.vigor ?? fallback.attributes.vigor)),
       agilidade: clampLevel(Number(character.attributes?.agilidade ?? fallback.attributes.agilidade)),
@@ -726,10 +1168,38 @@ function normalizeCharacter(character: Partial<Character>, index: number): Chara
     skills: Array.isArray(character.skills)
       ? character.skills
           .filter((skill) => typeof skill?.id === 'string')
-          .map((skill) => ({ id: skill.id, level: clampLevel(Number(skill.level)) }))
+          .map((skill) => ({ id: normalizeSkillId(skill.id), level: clampLevel(Number(skill.level)) }))
+          .filter((skill, index, normalizedSkills) => {
+            const skillDefinition = skills.find((currentSkill) => currentSkill.id === skill.id)
+
+            return Boolean(skillDefinition && canUseSkill(skillDefinition, court)) && normalizedSkills.findIndex((currentSkill) => currentSkill.id === skill.id) === index
+          })
       : [],
-    traits: Array.isArray(character.traits) ? character.traits.filter((trait) => typeof trait === 'string') : [],
+    battleDisciplines: Array.isArray(character.battleDisciplines)
+      ? character.battleDisciplines
+          .filter((discipline) => typeof discipline?.id === 'string')
+          .map((discipline) => ({ id: discipline.id, level: clampLevel(Number(discipline.level)) }))
+          .filter(
+            (discipline, index, normalizedDisciplines) =>
+              battleDisciplines.some((currentDiscipline) => currentDiscipline.id === discipline.id) &&
+              normalizedDisciplines.findIndex((currentDiscipline) => currentDiscipline.id === discipline.id) === index,
+          )
+      : [],
+    traits: Array.isArray(character.traits)
+      ? character.traits
+          .filter((trait) => typeof trait === 'string')
+          .map(normalizeTraitId)
+          .filter(
+            (trait, index, normalizedTraits) =>
+              traits.some((currentTrait) => currentTrait.id === trait) && normalizedTraits.findIndex((currentTrait) => currentTrait === trait) === index,
+          )
+      : [],
     lineageGiftLevel: Number(character.lineageGiftLevel) === 0 ? 0 : clampLevel(Number(character.lineageGiftLevel ?? 0)),
+    secondaryLineageGiftCourt,
+    secondaryLineageGiftLevel:
+      secondaryLineageGiftCourt && Number(character.secondaryLineageGiftLevel) !== 0
+        ? clampLevel(Number(character.secondaryLineageGiftLevel ?? 0))
+        : 0,
   }
 }
 
@@ -790,30 +1260,170 @@ function renderGiftEffect(level: LineageGift['levels'][number]) {
 }
 
 function getDerivedAttributes(character: Character): DerivedAttribute[] {
-  const { vigor, agilidade, canalizacao, determinacao, astucia } = character.attributes
+  const { vigor, agilidade, canalizacao, determinacao, astucia, encanto } = character.attributes
 
   return [
     {
       label: 'Vitalidade',
-      value: (vigor + determinacao) * 25,
-      formula: '(Vigor + Determinação) x 25',
+      value: (vigor + determinacao + canalizacao) * 20,
+      formula: '(Vigor + Determinação + Canalização) x 20',
     },
     {
       label: 'Mana',
-      value: (canalizacao + astucia) * 20,
-      formula: '(Canalização + Astúcia) x 20',
+      value: (canalizacao + astucia + determinacao) * 15,
+      formula: '(Canalização + Astúcia + Determinação) x 15',
     },
     {
       label: 'Stamina',
-      value: (vigor + agilidade) * 20,
-      formula: '(Vigor + Agilidade) x 20',
+      value: (vigor + agilidade + encanto) * 15,
+      formula: '(Vigor + Agilidade + Encanto) x 15',
     },
     {
       label: 'Iniciativa',
-      value: agilidade + astucia,
-      formula: 'Agilidade + Astúcia',
+      value: agilidade + astucia + encanto,
+      formula: 'Agilidade + Astúcia + Encanto',
     },
   ]
+}
+
+function parseSheetSnapshot(snapshot: string): SheetPayload | null {
+  if (!snapshot) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(snapshot) as Partial<SheetPayload>
+
+    if (!Array.isArray(parsed.characters)) {
+      return null
+    }
+
+    return {
+      theme: parsed.theme === 'light' ? 'light' : 'dark',
+      activeCharacterIndex: Number(parsed.activeCharacterIndex) || 0,
+      characters: parsed.characters,
+    }
+  } catch {
+    return null
+  }
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function getCharacterSpentXp(character: Character) {
+  const selectedTraits = traits.filter((trait) => character.traits.includes(trait.id))
+  const attributeXp = Object.values(character.attributes).reduce((total, level) => total + attributeCost(level), 0)
+  const skillXp = character.skills.reduce((total, skill) => total + skillCost(skill.level), 0)
+  const battleDisciplineXp = character.battleDisciplines.reduce((total, discipline) => total + skillCost(discipline.level), 0)
+  const advantages = selectedTraits.filter((trait) => trait.type === 'advantage').length
+  const disadvantages = selectedTraits.filter((trait) => trait.type === 'disadvantage').length
+  const traitXp = advantages * ADVANTAGE_COST - Math.min(disadvantages, DISADVANTAGE_CREDIT_LIMIT) * ADVANTAGE_COST
+  const lineageGiftXp =
+    (character.lineageGiftLevel > 0 ? lineageGiftCost(character.lineageGiftLevel) : 0) +
+    (character.secondaryLineageGiftLevel > 0 ? lineageGiftCost(character.secondaryLineageGiftLevel) * 2 : 0)
+
+  return attributeXp + skillXp + battleDisciplineXp + traitXp + lineageGiftXp
+}
+
+function renderExportRows(items: string[]) {
+  if (items.length === 0) {
+    return '<p class="muted">Nenhum item selecionado.</p>'
+  }
+
+  return `<ul>${items.map((item) => `<li>${item}</li>`).join('')}</ul>`
+}
+
+function buildCharacterExportHtml(character: Character) {
+  const spentXp = getCharacterSpentXp(character)
+  const remainingXp = INITIAL_XP - spentXp
+  const characterLineageGift = lineageGifts.find((gift) => gift.court === character.court)
+  const secondaryGift = lineageGifts.find((gift) => gift.court === character.secondaryLineageGiftCourt)
+  const characterTraits = traits.filter((trait) => character.traits.includes(trait.id))
+  const advantages = characterTraits.filter((trait) => trait.type === 'advantage')
+  const disadvantages = characterTraits.filter((trait) => trait.type === 'disadvantage')
+  const derivedRows = getDerivedAttributes(character).map(
+    (attribute) => `<li><strong>${escapeHtml(attribute.label)}:</strong> ${attribute.value} <small>${escapeHtml(attribute.formula)}</small></li>`,
+  )
+  const attributeRows = attributes.map(
+    (attribute) => `<li><strong>${escapeHtml(attribute.label)}:</strong> Nível ${character.attributes[attribute.key]}</li>`,
+  )
+  const skillRows = character.skills.map((characterSkill) => {
+    const skill = skills.find((currentSkill) => currentSkill.id === characterSkill.id)
+
+    return skill ? `${escapeHtml(formatSkillName(skill))}: Nível ${characterSkill.level}` : ''
+  })
+  const disciplineRows = character.battleDisciplines.map((characterDiscipline) => {
+    const discipline = battleDisciplines.find((currentDiscipline) => currentDiscipline.id === characterDiscipline.id)
+
+    return discipline ? `${escapeHtml(discipline.title)}: Nível ${characterDiscipline.level}` : ''
+  })
+
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(character.name)} - Ficha</title>
+  <style>
+    body { color: #211b16; font-family: Arial, sans-serif; margin: 32px; }
+    h1 { font-family: Georgia, serif; font-size: 30px; margin: 0 0 4px; }
+    h2 { border-bottom: 1px solid #c9b8a3; font-size: 15px; margin: 22px 0 10px; padding-bottom: 5px; text-transform: uppercase; }
+    .meta, .muted, small { color: #6f6257; }
+    .xp { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0; }
+    .xp span { border: 1px solid #c9b8a3; border-radius: 6px; padding: 8px 10px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    ul { margin: 0; padding-left: 18px; }
+    li { margin: 5px 0; }
+    @media print { body { margin: 18mm; } button { display: none; } }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(character.name)}</h1>
+  <p class="meta">${escapeHtml(character.court || 'Sem Corte selecionada')}</p>
+  <div class="xp">
+    <span><strong>${INITIAL_XP}</strong> XP inicial</span>
+    <span><strong>${spentXp}</strong> XP gasto</span>
+    <span><strong>${remainingXp}</strong> XP restante</span>
+  </div>
+  <section class="grid">
+    <div>
+      <h2>Atributos principais</h2>
+      ${renderExportRows(attributeRows)}
+    </div>
+    <div>
+      <h2>Atributos derivados</h2>
+      ${renderExportRows(derivedRows)}
+    </div>
+  </section>
+  <h2>Perícias</h2>
+  ${renderExportRows(skillRows.filter(Boolean))}
+  <h2>Dons de Linhagem</h2>
+  ${renderExportRows([
+    characterLineageGift ? `${escapeHtml(characterLineageGift.title)} (${escapeHtml(character.court)}): Nível ${character.lineageGiftLevel}` : '',
+    secondaryGift
+      ? `${escapeHtml(secondaryGift.title)} (${escapeHtml(character.secondaryLineageGiftCourt)}): Nível ${character.secondaryLineageGiftLevel} - secundário`
+      : '',
+  ].filter(Boolean))}
+  <h2>Disciplinas de Batalha</h2>
+  ${renderExportRows(disciplineRows.filter(Boolean))}
+  <section class="grid">
+    <div>
+      <h2>Vantagens</h2>
+      ${renderExportRows(advantages.map((trait) => `${escapeHtml(trait.label)} - ${escapeHtml(trait.subtitle)}`))}
+    </div>
+    <div>
+      <h2>Desvantagens</h2>
+      ${renderExportRows(disadvantages.map((trait) => `${escapeHtml(trait.label)} - ${escapeHtml(trait.subtitle)}`))}
+    </div>
+  </section>
+</body>
+</html>`
 }
 
 function App() {
@@ -822,6 +1432,8 @@ function App() {
   const [activeCharacterIndex, setActiveCharacterIndex] = useState(0)
   const [selectedSkillId, setSelectedSkillId] = useState('')
   const [hoveredSkillId, setHoveredSkillId] = useState('')
+  const [selectedBattleDisciplineId, setSelectedBattleDisciplineId] = useState('')
+  const [hoveredBattleDisciplineId, setHoveredBattleDisciplineId] = useState('')
   const [selectedAdvantageId, setSelectedAdvantageId] = useState('')
   const [selectedDisadvantageId, setSelectedDisadvantageId] = useState('')
   const [hoveredTraitId, setHoveredTraitId] = useState('')
@@ -833,8 +1445,24 @@ function App() {
 
   const character = characters[activeCharacterIndex]
   const selectedSkillIds = character.skills.map((skill) => skill.id)
-  const availableSkills = skills.filter((skill) => !selectedSkillIds.includes(skill.id))
+  const selectedStandardSkillCount = character.skills.filter((characterSkill) => {
+    const skill = skills.find((currentSkill) => currentSkill.id === characterSkill.id)
+
+    return Boolean(skill && isStandardSkill(skill))
+  }).length
+  const hasReachedStandardSkillLimit = selectedStandardSkillCount >= MAX_STANDARD_SKILLS
+  const availableSkills = skills.filter(
+    (skill) =>
+      canUseSkill(skill, character.court) &&
+      !selectedSkillIds.includes(skill.id) &&
+      (!isStandardSkill(skill) || !hasReachedStandardSkillLimit),
+  )
+  const canAddSelectedSkill = availableSkills.some((skill) => skill.id === selectedSkillId)
   const hoveredSkill = skills.find((skill) => skill.id === hoveredSkillId)
+  const selectedBattleDisciplineIds = character.battleDisciplines.map((discipline) => discipline.id)
+  const availableBattleDisciplines = battleDisciplines.filter((discipline) => !selectedBattleDisciplineIds.includes(discipline.id))
+  const hoveredBattleDiscipline = battleDisciplines.find((discipline) => discipline.id === hoveredBattleDisciplineId)
+  const hoveredBattleDisciplineLevel = character.battleDisciplines.find((discipline) => discipline.id === hoveredBattleDisciplineId)?.level ?? 0
   const selectedTraits = traits.filter((trait) => character.traits.includes(trait.id))
   const selectedTraitIds = selectedTraits.map((trait) => trait.id)
   const availableAdvantages = traits.filter((trait) => trait.type === 'advantage' && !selectedTraitIds.includes(trait.id))
@@ -843,6 +1471,8 @@ function App() {
   const selectedAdvantages = selectedTraits.filter((trait) => trait.type === 'advantage')
   const selectedDisadvantages = selectedTraits.filter((trait) => trait.type === 'disadvantage')
   const lineageGift = lineageGifts.find((gift) => gift.court === character.court)
+  const secondaryLineageGift = lineageGifts.find((gift) => gift.court === character.secondaryLineageGiftCourt)
+  const secondaryLineageOptions = lineageGifts.filter((gift) => gift.court !== character.court)
   const activeGiftHelpLevel = hoveredGiftLevel ?? (character.lineageGiftLevel || null)
   const creditedDisadvantageIds = selectedTraits
     .filter((trait) => trait.type === 'disadvantage')
@@ -874,13 +1504,23 @@ function App() {
   const spentXp = useMemo(() => {
     const attributeXp = Object.values(character.attributes).reduce((total, level) => total + attributeCost(level), 0)
     const skillXp = character.skills.reduce((total, skill) => total + skillCost(skill.level), 0)
+    const battleDisciplineXp = character.battleDisciplines.reduce((total, discipline) => total + skillCost(discipline.level), 0)
     const advantages = selectedTraits.filter((trait) => trait.type === 'advantage').length
     const disadvantages = selectedTraits.filter((trait) => trait.type === 'disadvantage').length
     const traitXp = advantages * ADVANTAGE_COST - Math.min(disadvantages, DISADVANTAGE_CREDIT_LIMIT) * ADVANTAGE_COST
-    const lineageGiftXp = character.lineageGiftLevel > 0 ? lineageGiftCost(character.lineageGiftLevel) : 0
+    const lineageGiftXp =
+      (character.lineageGiftLevel > 0 ? lineageGiftCost(character.lineageGiftLevel) : 0) +
+      (character.secondaryLineageGiftLevel > 0 ? lineageGiftCost(character.secondaryLineageGiftLevel) * 2 : 0)
 
-    return attributeXp + skillXp + traitXp + lineageGiftXp
-  }, [character.attributes, character.skills, character.lineageGiftLevel, selectedTraits])
+    return attributeXp + skillXp + battleDisciplineXp + traitXp + lineageGiftXp
+  }, [
+    character.attributes,
+    character.battleDisciplines,
+    character.skills,
+    character.lineageGiftLevel,
+    character.secondaryLineageGiftLevel,
+    selectedTraits,
+  ])
 
   const remainingXp = INITIAL_XP - spentXp
   const derivedAttributes = useMemo(() => getDerivedAttributes(character), [character])
@@ -894,6 +1534,8 @@ function App() {
   )
   const currentSnapshot = useMemo(() => JSON.stringify(sheetPayload), [sheetPayload])
   const hasUnsavedChanges = isLoaded && currentSnapshot !== savedSnapshot
+  const savedSheet = useMemo(() => parseSheetSnapshot(savedSnapshot), [savedSnapshot])
+  const savedActiveCharacter = savedSheet?.characters[activeCharacterIndex]
 
   useEffect(() => {
     let isCurrent = true
@@ -979,6 +1621,26 @@ function App() {
       .catch(() => setSaveStatus('error'))
   }
 
+  function handleExportPdf() {
+    if (!savedActiveCharacter) {
+      return
+    }
+
+    const exportWindow = window.open('', '_blank')
+
+    if (!exportWindow) {
+      return
+    }
+
+    exportWindow.document.open()
+    exportWindow.document.write(buildCharacterExportHtml(savedActiveCharacter))
+    exportWindow.document.close()
+    exportWindow.focus()
+    window.setTimeout(() => {
+      exportWindow.print()
+    }, 250)
+  }
+
   function updateActiveCharacter(updater: (character: Character) => Character) {
     setCharacters((currentCharacters) =>
       currentCharacters.map((currentCharacter, index) =>
@@ -1006,7 +1668,18 @@ function App() {
       ...current,
       court,
       lineageGiftLevel: 0,
+      secondaryLineageGiftCourt: current.secondaryLineageGiftCourt === court ? '' : current.secondaryLineageGiftCourt,
+      secondaryLineageGiftLevel: current.secondaryLineageGiftCourt === court ? 0 : current.secondaryLineageGiftLevel,
+      skills: current.skills.filter((characterSkill) => {
+        const skill = skills.find((currentSkill) => currentSkill.id === characterSkill.id)
+
+        return Boolean(skill && canUseSkill(skill, court))
+      }),
     }))
+    setSelectedSkillId('')
+    setHoveredSkillId('')
+    setSelectedBattleDisciplineId('')
+    setHoveredBattleDisciplineId('')
     setHoveredGiftLevel(null)
   }
 
@@ -1014,6 +1687,21 @@ function App() {
     updateActiveCharacter((current) => ({
       ...current,
       lineageGiftLevel: level === 0 ? 0 : clampLevel(level),
+    }))
+  }
+
+  function updateSecondaryLineageGiftCourt(court: string) {
+    updateActiveCharacter((current) => ({
+      ...current,
+      secondaryLineageGiftCourt: court,
+      secondaryLineageGiftLevel: 0,
+    }))
+  }
+
+  function updateSecondaryLineageGiftLevel(level: number) {
+    updateActiveCharacter((current) => ({
+      ...current,
+      secondaryLineageGiftLevel: level === 0 ? 0 : clampLevel(level),
     }))
   }
 
@@ -1027,6 +1715,8 @@ function App() {
     setActiveCharacterIndex(nextIndex)
     setSelectedSkillId('')
     setHoveredSkillId('')
+    setSelectedBattleDisciplineId('')
+    setHoveredBattleDisciplineId('')
     setSelectedAdvantageId('')
     setSelectedDisadvantageId('')
     setHoveredTraitId('')
@@ -1048,6 +1738,8 @@ function App() {
     })
     setSelectedSkillId('')
     setHoveredSkillId('')
+    setSelectedBattleDisciplineId('')
+    setHoveredBattleDisciplineId('')
     setSelectedAdvantageId('')
     setSelectedDisadvantageId('')
     setHoveredTraitId('')
@@ -1059,6 +1751,8 @@ function App() {
     setActiveCharacterIndex(0)
     setSelectedSkillId('')
     setHoveredSkillId('')
+    setSelectedBattleDisciplineId('')
+    setHoveredBattleDisciplineId('')
     setSelectedAdvantageId('')
     setSelectedDisadvantageId('')
     setHoveredTraitId('')
@@ -1066,7 +1760,15 @@ function App() {
   }
 
   function addSkill() {
-    if (!selectedSkillId || selectedSkillIds.includes(selectedSkillId)) {
+    const selectedSkill = skills.find((skill) => skill.id === selectedSkillId)
+
+    if (
+      !selectedSkillId ||
+      !selectedSkill ||
+      selectedSkillIds.includes(selectedSkillId) ||
+      !canUseSkill(selectedSkill, character.court) ||
+      (isStandardSkill(selectedSkill) && hasReachedStandardSkillLimit)
+    ) {
       return
     }
 
@@ -1076,6 +1778,43 @@ function App() {
     }))
     setHoveredSkillId(selectedSkillId)
     setSelectedSkillId('')
+  }
+
+  function addBattleDiscipline() {
+    if (
+      !selectedBattleDisciplineId ||
+      selectedBattleDisciplineIds.includes(selectedBattleDisciplineId) ||
+      !availableBattleDisciplines.some((discipline) => discipline.id === selectedBattleDisciplineId)
+    ) {
+      return
+    }
+
+    updateActiveCharacter((current) => ({
+      ...current,
+      battleDisciplines: [...current.battleDisciplines, { id: selectedBattleDisciplineId, level: 1 }],
+    }))
+    setHoveredBattleDisciplineId(selectedBattleDisciplineId)
+    setSelectedBattleDisciplineId('')
+  }
+
+  function removeBattleDiscipline(disciplineId: string) {
+    updateActiveCharacter((current) => ({
+      ...current,
+      battleDisciplines: current.battleDisciplines.filter((discipline) => discipline.id !== disciplineId),
+    }))
+
+    if (hoveredBattleDisciplineId === disciplineId) {
+      setHoveredBattleDisciplineId('')
+    }
+  }
+
+  function updateBattleDisciplineLevel(disciplineId: string, level: number) {
+    updateActiveCharacter((current) => ({
+      ...current,
+      battleDisciplines: current.battleDisciplines.map((discipline) =>
+        discipline.id === disciplineId ? { ...discipline, level: clampLevel(level) } : discipline,
+      ),
+    }))
   }
 
   function removeSkill(skillId: string) {
@@ -1099,12 +1838,17 @@ function App() {
   function addTrait(traitId: string) {
     const selectedTrait = traits.find((trait) => trait.id === traitId)
     const advantageCount = selectedTraits.filter((trait) => trait.type === 'advantage').length
+    const disadvantageCount = selectedTraits.filter((trait) => trait.type === 'disadvantage').length
 
     if (!selectedTrait || selectedTraitIds.includes(selectedTrait.id)) {
       return
     }
 
     if (selectedTrait.type === 'advantage' && advantageCount >= MAX_ADVANTAGES) {
+      return
+    }
+
+    if (selectedTrait.type === 'disadvantage' && disadvantageCount >= MAX_DISADVANTAGES) {
       return
     }
 
@@ -1152,6 +1896,10 @@ function App() {
           <button className="save-button" type="button" onClick={handleSave} disabled={!hasUnsavedChanges || saveStatus === 'saving'}>
             Salvar
           </button>
+          <button className="ghost-button" type="button" onClick={handleExportPdf} disabled={!savedActiveCharacter || saveStatus === 'loading'}>
+            Exportar PDF
+          </button>
+          <span className="export-note">Exporta a versão salva mais recente.</span>
           <div className="header-stats" aria-label="Resumo de XP">
             <strong>{INITIAL_XP} XP</strong>
             <strong>{spentXp} gasto</strong>
@@ -1184,6 +1932,8 @@ function App() {
                   setActiveCharacterIndex(index)
                   setSelectedSkillId('')
                   setHoveredSkillId('')
+                  setSelectedBattleDisciplineId('')
+                  setHoveredBattleDisciplineId('')
                   setSelectedAdvantageId('')
                   setSelectedDisadvantageId('')
                   setHoveredTraitId('')
@@ -1235,15 +1985,18 @@ function App() {
         </form>
 
         <section className="panel cost-panel">
-          <h2>Custo de evolução dos atributos principais</h2>
+          <h2>Custos de evolução</h2>
           <div className="cost-grid">
-            {Object.entries(attributeLevelCosts).map(([level, cost]) => (
+            {Object.entries(skillLevelCosts).map(([level, cost]) => (
               <span key={level}>
                 <strong>Nível {level}</strong>
-                <em>{cost === 0 ? 'Gratuito' : `${cost} XP`}</em>
+                <em>{cost} XP</em>
               </span>
             ))}
           </div>
+          <p className="cost-note">
+            Atributos, Perícias, Dons de Linhagem e Disciplinas de Batalha usam esta progressão. O nível 1 de Atributos é gratuito.
+          </p>
         </section>
 
         <section className="panel xp-panel">
@@ -1313,7 +2066,7 @@ function App() {
                     <option value="">Selecione uma vantagem...</option>
                     {availableAdvantages.map((trait) => (
                       <option key={trait.id} value={trait.id}>
-                        {trait.label}
+                        {formatTraitName(trait)}
                       </option>
                     ))}
                   </select>
@@ -1342,7 +2095,7 @@ function App() {
                       </span>
                       <em className="xp-delta spend">{xpDelta(-ADVANTAGE_COST)}</em>
                       <button className="icon-button danger-button" type="button" onClick={() => removeTrait(trait.id)}>
-                        -
+                        X
                       </button>
                     </article>
                   ))}
@@ -1351,12 +2104,15 @@ function App() {
 
               <section className="trait-column">
                 <h3>Desvantagens</h3>
+                {selectedDisadvantages.length >= MAX_DISADVANTAGES && (
+                  <p className="limit-note">Limite de 3 desvantagens alcançado. Não é possível adicionar mais.</p>
+                )}
                 <div className="skill-picker">
                   <select value={selectedDisadvantageId} onChange={(event) => setSelectedDisadvantageId(event.target.value)}>
                     <option value="">Selecione uma desvantagem...</option>
                     {availableDisadvantages.map((trait) => (
                       <option key={trait.id} value={trait.id}>
-                        {trait.label}
+                        {formatTraitName(trait)}
                       </option>
                     ))}
                   </select>
@@ -1364,7 +2120,7 @@ function App() {
                     className="icon-button"
                     type="button"
                     onClick={() => addTrait(selectedDisadvantageId)}
-                    disabled={!selectedDisadvantageId}
+                    disabled={!selectedDisadvantageId || selectedDisadvantages.length >= MAX_DISADVANTAGES}
                   >
                     +
                   </button>
@@ -1390,7 +2146,7 @@ function App() {
                           {grantsCredit ? xpDelta(ADVANTAGE_COST) : '0 XP'}
                         </em>
                         <button className="icon-button danger-button" type="button" onClick={() => removeTrait(trait.id)}>
-                          -
+                          X
                         </button>
                       </article>
                     )
@@ -1417,18 +2173,6 @@ function App() {
           </div>
         </section>
 
-        <section className="panel cost-panel">
-          <h2>Custo de evolução dos dons de linhagem</h2>
-          <div className="cost-grid">
-            {Object.entries(lineageGiftLevelCosts).map(([level, cost]) => (
-              <span key={level}>
-                <strong>Nível {level}</strong>
-                <em>{cost} XP</em>
-              </span>
-            ))}
-          </div>
-        </section>
-
         <section className="panel lineage-panel">
           <div className="panel-heading">
             <h2>Dons de linhagem</h2>
@@ -1439,7 +2183,7 @@ function App() {
             <div className="lineage-gift">
               <div className="lineage-main">
                 <div className="lineage-summary">
-                  <span>{character.court}</span>
+                  <span>Primário - {character.court}</span>
                   <strong>{lineageGift.title}</strong>
                   <p>{lineageGift.description}</p>
                 </div>
@@ -1461,11 +2205,34 @@ function App() {
                     )
                   })}
                 </div>
+
+                {secondaryLineageGift && (
+                  <>
+                    <div className="lineage-summary">
+                      <span>Secundário - {secondaryLineageGift.court}</span>
+                      <strong>{secondaryLineageGift.title}</strong>
+                      <p>{secondaryLineageGift.description}</p>
+                    </div>
+
+                    <div className="lineage-levels">
+                      {Object.entries(secondaryLineageGift.levels).map(([level, effect]) => {
+                        const numericLevel = Number(level)
+
+                        return (
+                          <article className={numericLevel <= character.secondaryLineageGiftLevel ? 'active' : ''} key={level}>
+                            <strong>Nível {level}</strong>
+                            <p>{renderGiftEffect(effect)}</p>
+                          </article>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
 
               <aside className="lineage-side">
                 <label className="lineage-level">
-                  Nível do dom
+                  Nível do dom primário
                   <select value={character.lineageGiftLevel} onChange={(event) => updateLineageGiftLevel(Number(event.target.value))}>
                     <option value="0">Não despertado</option>
                     <option value="1">Nível 1</option>
@@ -1476,6 +2243,37 @@ function App() {
                   </select>
                   <em className={character.lineageGiftLevel > 0 ? 'xp-delta spend' : 'xp-delta free'}>
                     {character.lineageGiftLevel > 0 ? xpDelta(-lineageGiftCost(character.lineageGiftLevel)) : '0 XP'}
+                  </em>
+                </label>
+
+                <label className="lineage-level">
+                  Dom secundário
+                  <select value={character.secondaryLineageGiftCourt} onChange={(event) => updateSecondaryLineageGiftCourt(event.target.value)}>
+                    <option value="">Nenhum</option>
+                    {secondaryLineageOptions.map((gift) => (
+                      <option key={gift.court} value={gift.court}>
+                        {gift.court}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="lineage-level">
+                  Nível do dom secundário
+                  <select
+                    value={character.secondaryLineageGiftLevel}
+                    onChange={(event) => updateSecondaryLineageGiftLevel(Number(event.target.value))}
+                    disabled={!secondaryLineageGift}
+                  >
+                    <option value="0">Não despertado</option>
+                    <option value="1">Nível 1</option>
+                    <option value="2">Nível 2</option>
+                    <option value="3">Nível 3</option>
+                    <option value="4">Nível 4</option>
+                    <option value="5">Nível 5</option>
+                  </select>
+                  <em className={character.secondaryLineageGiftLevel > 0 ? 'xp-delta spend' : 'xp-delta free'}>
+                    {character.secondaryLineageGiftLevel > 0 ? xpDelta(-lineageGiftCost(character.secondaryLineageGiftLevel) * 2) : '0 XP'}
                   </em>
                 </label>
 
@@ -1497,19 +2295,96 @@ function App() {
               </aside>
             </div>
           ) : (
-            <p className="empty-state">Selecione uma Corte para visualizar o dom de linhagem correspondente.</p>
+            <p className="empty-state lineage-empty-state">Selecione uma Corte para visualizar o dom de linhagem correspondente.</p>
           )}
         </section>
 
-        <section className="panel cost-panel">
-          <h2>Custo de evolução das perícias</h2>
-          <div className="cost-grid">
-            {Object.entries(skillLevelCosts).map(([level, cost]) => (
-              <span key={level}>
-                <strong>Nível {level}</strong>
-                <em>{cost} XP</em>
-              </span>
-            ))}
+        <section className="panel disciplines-panel">
+          <div className="panel-heading">
+            <h2>Disciplinas de batalha</h2>
+            <span className="budget">{character.battleDisciplines.length} adicionadas</span>
+          </div>
+
+          <div className="skill-picker">
+            <select value={selectedBattleDisciplineId} onChange={(event) => setSelectedBattleDisciplineId(event.target.value)}>
+              <option value="">Selecione uma disciplina...</option>
+              {availableBattleDisciplines.map((discipline) => (
+                <option key={discipline.id} value={discipline.id}>
+                  {discipline.title}
+                </option>
+              ))}
+            </select>
+            <button className="icon-button" type="button" onClick={addBattleDiscipline} disabled={!selectedBattleDisciplineId}>
+              +
+            </button>
+          </div>
+
+          <div className="skills-workspace">
+            <div className="skill-list">
+              {character.battleDisciplines.length === 0 && <p className="empty-state">Nenhuma disciplina adicionada.</p>}
+              {character.battleDisciplines.map((characterDiscipline) => {
+                const discipline = battleDisciplines.find((currentDiscipline) => currentDiscipline.id === characterDiscipline.id)
+
+                if (!discipline) {
+                  return null
+                }
+
+                return (
+                  <article
+                    className="skill-row"
+                    key={characterDiscipline.id}
+                    onMouseEnter={() => setHoveredBattleDisciplineId(characterDiscipline.id)}
+                    onFocus={() => setHoveredBattleDisciplineId(characterDiscipline.id)}
+                  >
+                    <span>
+                      <strong>{discipline.title}</strong>
+                      {discipline.subtitle}
+                    </span>
+                    <select
+                      value={characterDiscipline.level}
+                      onChange={(event) => updateBattleDisciplineLevel(characterDiscipline.id, Number(event.target.value))}
+                    >
+                      <option value="1">Nível 1</option>
+                      <option value="2">Nível 2</option>
+                      <option value="3">Nível 3</option>
+                      <option value="4">Nível 4</option>
+                      <option value="5">Nível 5</option>
+                    </select>
+                    <em className="xp-delta spend">{xpDelta(-skillCost(characterDiscipline.level))}</em>
+                    <button className="icon-button danger-button" type="button" onClick={() => removeBattleDiscipline(characterDiscipline.id)}>
+                      X
+                    </button>
+                  </article>
+                )
+              })}
+            </div>
+
+            <aside className="skill-help">
+              {hoveredBattleDiscipline ? (
+                <>
+                  <span>{hoveredBattleDiscipline.subtitle}</span>
+                  <strong>{hoveredBattleDiscipline.title}</strong>
+                  <p>{hoveredBattleDiscipline.description}</p>
+                  <div className="discipline-help-levels">
+                    {Object.entries(hoveredBattleDiscipline.levels).map(([level, effect]) => {
+                      const numericLevel = Number(level)
+
+                      return (
+                      <p className={numericLevel <= hoveredBattleDisciplineLevel ? 'active' : ''} key={level}>
+                        <strong>Nível {level}:</strong> {effect.name} - {effect.effect}
+                      </p>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span>Ajuda rápida</span>
+                  <strong>Disciplinas de batalha</strong>
+                  <p>Passe o mouse sobre uma disciplina adicionada para ver seus níveis e bônus.</p>
+                </>
+              )}
+            </aside>
           </div>
         </section>
 
@@ -1518,17 +2393,20 @@ function App() {
             <h2>Perícias</h2>
             <span className="budget">{character.skills.length} adicionadas</span>
           </div>
+          {hasReachedStandardSkillLimit && (
+            <p className="limit-note">Só é possível adicionar até 6 perícias bélicas e eruditas.</p>
+          )}
 
           <div className="skill-picker">
             <select value={selectedSkillId} onChange={(event) => setSelectedSkillId(event.target.value)}>
               <option value="">Selecione uma perícia...</option>
               {availableSkills.map((skill) => (
                 <option key={skill.id} value={skill.id}>
-                  {skill.label}
+                  {formatSkillName(skill)}
                 </option>
               ))}
             </select>
-            <button className="icon-button" type="button" onClick={addSkill} disabled={!selectedSkillId}>
+            <button className="icon-button" type="button" onClick={addSkill} disabled={!canAddSelectedSkill}>
               +
             </button>
           </div>
@@ -1551,7 +2429,7 @@ function App() {
                     onFocus={() => setHoveredSkillId(characterSkill.id)}
                   >
                     <span>
-                      <strong>{skill.label}</strong>
+                      <strong>{formatSkillName(skill)}</strong>
                       {skill.subtitle}
                     </span>
                     <select
@@ -1566,7 +2444,7 @@ function App() {
                     </select>
                     <em className="xp-delta spend">{xpDelta(-skillCost(characterSkill.level))}</em>
                     <button className="icon-button danger-button" type="button" onClick={() => removeSkill(characterSkill.id)}>
-                      -
+                      X
                     </button>
                   </article>
                 )
@@ -1577,7 +2455,7 @@ function App() {
               {hoveredSkill ? (
                 <>
                   <span>{hoveredSkill.subtitle}</span>
-                  <strong>{hoveredSkill.label}</strong>
+                  <strong>{formatSkillName(hoveredSkill)}</strong>
                   <p>{hoveredSkill.description}</p>
                 </>
               ) : (

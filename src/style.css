@@ -444,8 +444,25 @@ textarea:focus {
 
 .skills-panel,
 .traits-panel,
+.disciplines-panel,
 .lineage-panel {
   grid-column: span 2;
+}
+
+.skills-panel {
+  order: 20;
+}
+
+.lineage-panel {
+  order: 30;
+}
+
+.disciplines-panel {
+  order: 40;
+}
+
+.traits-panel {
+  order: 50;
 }
 
 .skill-picker {
@@ -494,6 +511,10 @@ textarea:focus {
   font-size: 0.84rem;
   font-weight: 800;
   line-height: 1.35;
+}
+
+.panel-heading + .limit-note {
+  margin-top: 12px;
 }
 
 .trait-column .skill-picker {
@@ -549,6 +570,16 @@ textarea:focus {
 
 .danger-button {
   color: var(--danger);
+  font-weight: 400;
+}
+
+.export-note {
+  max-width: 190px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: right;
 }
 
 .empty-state {
@@ -560,6 +591,10 @@ textarea:focus {
   border-radius: 6px;
   color: var(--muted);
   font-weight: 700;
+}
+
+.lineage-empty-state {
+  margin-top: 16px;
 }
 
 .skill-help {
@@ -689,6 +724,25 @@ textarea:focus {
   font-weight: 900;
 }
 
+.discipline-help-levels {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.discipline-help-levels p {
+  margin: 0;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  opacity: 0.55;
+  padding-top: 8px;
+}
+
+.discipline-help-levels p.active {
+  color: var(--text);
+  opacity: 1;
+}
+
 .derived-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -727,6 +781,14 @@ textarea:focus {
 
 .cost-panel {
   grid-column: span 2;
+}
+
+.cost-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .cost-grid {
@@ -795,6 +857,10 @@ textarea:focus {
   }
 
   .skills-panel {
+    grid-column: auto;
+  }
+
+  .disciplines-panel {
     grid-column: auto;
   }
 

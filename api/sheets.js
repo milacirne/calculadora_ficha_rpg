@@ -1,4 +1,4 @@
-import { list, put } from '@vercel/blob'
+import { del, list, put } from '@vercel/blob'
 
 const defaultState = {
   theme: 'dark',
@@ -6,7 +6,7 @@ const defaultState = {
   characters: [],
 }
 
-const backendVersion = '2026-06-20-cache-v4'
+const backendVersion = '2026-06-20-versioned-v5'
 
 function getPlayerId(request) {
   const url = new URL(request.url, `https://${request.headers.host || 'localhost'}`)
@@ -56,7 +56,8 @@ export default async function handler(request, response) {
     return
   }
 
-  const pathname = `sheets/${playerId}.json`
+  const legacyPathname = `sheets/${playerId}.json`
+  const pathnamePrefix = `sheets/${playerId}`
   let stage = 'starting'
 
   try {
@@ -66,11 +67,13 @@ export default async function handler(request, response) {
       response.setHeader('Vercel-CDN-Cache-Control', 'no-store')
       stage = 'listing'
       const existingFiles = await list({
-        prefix: pathname,
-        limit: 1,
+        prefix: pathnamePrefix,
+        limit: 1000,
         token: blobToken,
       })
-      const existingFile = existingFiles.blobs.find((blob) => blob.pathname === pathname)
+      const existingFile = existingFiles.blobs
+        .filter((blob) => blob.pathname === legacyPathname || blob.pathname.startsWith(`${pathnamePrefix}/`))
+        .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())[0]
 
       if (!existingFile) {
         response.status(200).json({ ...defaultState, backendVersion })
@@ -78,9 +81,7 @@ export default async function handler(request, response) {
       }
 
       stage = 'reading'
-      const blobUrl = new URL(existingFile.url)
-      blobUrl.searchParams.set('cache', '0')
-      const result = await fetch(blobUrl, {
+      const result = await fetch(existingFile.url, {
         cache: 'no-store',
       })
 
@@ -98,13 +99,31 @@ export default async function handler(request, response) {
     if (request.method === 'PUT') {
       stage = 'writing'
       const safeState = sanitizeState(request.body)
+      const versionId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      const pathname = `${pathnamePrefix}/${versionId}.json`
 
       await put(pathname, JSON.stringify(safeState, null, 2), {
         access: 'public',
-        allowOverwrite: true,
         contentType: 'application/json',
         token: blobToken,
       })
+
+      try {
+        const savedFiles = await list({
+          prefix: `${pathnamePrefix}/`,
+          limit: 1000,
+          token: blobToken,
+        })
+        const oldFiles = savedFiles.blobs
+          .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
+          .slice(5)
+
+        if (oldFiles.length > 0) {
+          await del(oldFiles.map((blob) => blob.url), { token: blobToken })
+        }
+      } catch (cleanupError) {
+        console.error('Nao foi possivel limpar versoes antigas da ficha:', cleanupError)
+      }
 
       response.status(200).json({ ok: true })
       return

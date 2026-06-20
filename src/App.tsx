@@ -1341,6 +1341,10 @@ function renderExportRows(items: string[]) {
 }
 
 function renderExportXpDelta(value: number) {
+  if (value === 0) {
+    return ''
+  }
+
   const className = value >= 0 ? 'credit' : 'spend'
   const label = value > 0 ? `+${value} XP` : `${value} XP`
 
@@ -1361,7 +1365,7 @@ function buildCharacterExportHtml(character: Character) {
   const attributeRows = attributes.map(
     (attribute) =>
       `<strong>${escapeHtml(attribute.label)}:</strong> Nível ${character.attributes[attribute.key]}${renderExportXpDelta(
-        -progressiveCost(character.attributes[attribute.key], attributeLevelCosts),
+        -attributeCost(character.attributes[attribute.key]),
       )}`,
   )
   const skillRows = character.skills.map((characterSkill) => {

@@ -6,6 +6,8 @@ const defaultState = {
   characters: [],
 }
 
+const backendVersion = '2026-06-20-get-v3'
+
 function getPlayerId(request) {
   const url = new URL(request.url, `https://${request.headers.host || 'localhost'}`)
   const playerId = url.searchParams.get('playerId')
@@ -55,9 +57,11 @@ export default async function handler(request, response) {
   }
 
   const pathname = `sheets/${playerId}.json`
+  let stage = 'starting'
 
   try {
     if (request.method === 'GET') {
+      stage = 'listing'
       const existingFiles = await list({
         prefix: pathname,
         limit: 1,
@@ -66,24 +70,28 @@ export default async function handler(request, response) {
       const existingFile = existingFiles.blobs.find((blob) => blob.pathname === pathname)
 
       if (!existingFile) {
-        response.status(200).json(defaultState)
+        response.status(200).json({ ...defaultState, backendVersion })
         return
       }
 
+      stage = 'reading'
       const result = await fetch(existingFile.url, {
         cache: 'no-store',
       })
 
       if (!result.ok) {
-        throw new Error(`Falha ao ler a ficha salva: ${result.status} ${result.statusText}`)
+        const errorBody = (await result.text()).slice(0, 300)
+        throw new Error(`Falha ao ler a ficha salva: ${result.status} ${result.statusText} | ${errorBody}`)
       }
 
+      stage = 'parsing'
       const savedState = JSON.parse(await result.text())
-      response.status(200).json(sanitizeState(savedState))
+      response.status(200).json({ ...sanitizeState(savedState), backendVersion })
       return
     }
 
     if (request.method === 'PUT') {
+      stage = 'writing'
       const safeState = sanitizeState(request.body)
 
       await put(pathname, JSON.stringify(safeState, null, 2), {
@@ -103,6 +111,8 @@ export default async function handler(request, response) {
     console.error('Erro em /api/sheets:', error)
     response.status(500).json({
       error: 'Nao foi possivel acessar o armazenamento.',
+      stage,
+      backendVersion,
       detail: getErrorDetail(error),
     })
   }

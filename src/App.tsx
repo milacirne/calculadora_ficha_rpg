@@ -1933,7 +1933,7 @@ function App() {
                 {INITIAL_XP} base <em>+ {disadvantageCredit} bônus</em>
               </small>
             </strong>
-            <strong>{spentXp} xp gasto</strong>
+            <strong className="danger">{spentXp} xp gasto</strong>
             <strong className={remainingXp < 0 ? 'danger' : 'success'}>{remainingXp} xp restante</strong>
           </div>
         </div>

@@ -96,7 +96,6 @@ type SheetPayload = {
 
 const INITIAL_XP = 900
 const MAX_CHARACTERS = 3
-const MAX_STANDARD_SKILLS = 6
 const ADVANTAGE_COST = 100
 const MAX_ADVANTAGES = 3
 const MAX_DISADVANTAGES = 3
@@ -349,10 +348,6 @@ function canUseSkill(skill: Skill, court: string) {
 
 function formatSkillName(skill: Skill) {
   return `${skill.type} - ${skill.label}`
-}
-
-function isStandardSkill(skill: Skill) {
-  return skill.type === 'Bélica' || skill.type === 'Erudita'
 }
 
 function formatTraitName(trait: Trait) {
@@ -1323,13 +1318,20 @@ function getCharacterSpentXp(character: Character) {
   const skillXp = character.skills.reduce((total, skill) => total + skillCost(skill.level), 0)
   const battleDisciplineXp = character.battleDisciplines.reduce((total, discipline) => total + skillCost(discipline.level), 0)
   const advantages = selectedTraits.filter((trait) => trait.type === 'advantage').length
-  const disadvantages = selectedTraits.filter((trait) => trait.type === 'disadvantage').length
-  const traitXp = advantages * ADVANTAGE_COST - Math.min(disadvantages, DISADVANTAGE_CREDIT_LIMIT) * ADVANTAGE_COST
+  const traitXp = advantages * ADVANTAGE_COST
   const lineageGiftXp =
     (character.lineageGiftLevel > 0 ? lineageGiftCost(character.lineageGiftLevel) : 0) +
     (character.secondaryLineageGiftLevel > 0 ? lineageGiftCost(character.secondaryLineageGiftLevel) * 2 : 0)
 
   return attributeXp + skillXp + battleDisciplineXp + traitXp + lineageGiftXp
+}
+
+function getCharacterDisadvantageCredit(character: Character) {
+  const disadvantages = traits.filter(
+    (trait) => trait.type === 'disadvantage' && character.traits.includes(trait.id),
+  ).length
+
+  return Math.min(disadvantages, DISADVANTAGE_CREDIT_LIMIT) * ADVANTAGE_COST
 }
 
 function renderExportRows(items: string[]) {
@@ -1353,7 +1355,9 @@ function renderExportXpDelta(value: number) {
 
 function buildCharacterExportHtml(character: Character) {
   const spentXp = getCharacterSpentXp(character)
-  const remainingXp = INITIAL_XP - spentXp
+  const disadvantageCredit = getCharacterDisadvantageCredit(character)
+  const availableXp = INITIAL_XP + disadvantageCredit
+  const remainingXp = availableXp - spentXp
   const characterLineageGift = lineageGifts.find((gift) => gift.court === character.court)
   const secondaryGift = lineageGifts.find((gift) => gift.court === character.secondaryLineageGiftCourt)
   const characterTraits = traits.filter((trait) => character.traits.includes(trait.id))
@@ -1408,7 +1412,7 @@ function buildCharacterExportHtml(character: Character) {
   <h1>${escapeHtml(character.name)}</h1>
   <p class="meta">${escapeHtml(character.court || 'Sem Corte selecionada')}</p>
   <div class="xp">
-    <span><strong>${INITIAL_XP}</strong> XP inicial</span>
+    <span><strong>${INITIAL_XP} XP + ${disadvantageCredit} XP</strong> de desvantagens = ${availableXp} XP disponível</span>
     <span><strong>${spentXp}</strong> XP gasto</span>
     <span><strong>${remainingXp}</strong> XP restante</span>
   </div>
@@ -1474,17 +1478,10 @@ function App() {
 
   const character = characters[activeCharacterIndex]
   const selectedSkillIds = character.skills.map((skill) => skill.id)
-  const selectedStandardSkillCount = character.skills.filter((characterSkill) => {
-    const skill = skills.find((currentSkill) => currentSkill.id === characterSkill.id)
-
-    return Boolean(skill && isStandardSkill(skill))
-  }).length
-  const hasReachedStandardSkillLimit = selectedStandardSkillCount >= MAX_STANDARD_SKILLS
   const availableSkills = skills.filter(
     (skill) =>
       canUseSkill(skill, character.court) &&
-      !selectedSkillIds.includes(skill.id) &&
-      (!isStandardSkill(skill) || !hasReachedStandardSkillLimit),
+      !selectedSkillIds.includes(skill.id),
   )
   const canAddSelectedSkill = availableSkills.some((skill) => skill.id === selectedSkillId)
   const hoveredSkill = skills.find((skill) => skill.id === hoveredSkillId)
@@ -1535,8 +1532,7 @@ function App() {
     const skillXp = character.skills.reduce((total, skill) => total + skillCost(skill.level), 0)
     const battleDisciplineXp = character.battleDisciplines.reduce((total, discipline) => total + skillCost(discipline.level), 0)
     const advantages = selectedTraits.filter((trait) => trait.type === 'advantage').length
-    const disadvantages = selectedTraits.filter((trait) => trait.type === 'disadvantage').length
-    const traitXp = advantages * ADVANTAGE_COST - Math.min(disadvantages, DISADVANTAGE_CREDIT_LIMIT) * ADVANTAGE_COST
+    const traitXp = advantages * ADVANTAGE_COST
     const lineageGiftXp =
       (character.lineageGiftLevel > 0 ? lineageGiftCost(character.lineageGiftLevel) : 0) +
       (character.secondaryLineageGiftLevel > 0 ? lineageGiftCost(character.secondaryLineageGiftLevel) * 2 : 0)
@@ -1551,7 +1547,9 @@ function App() {
     selectedTraits,
   ])
 
-  const remainingXp = INITIAL_XP - spentXp
+  const disadvantageCredit = Math.min(selectedDisadvantages.length, DISADVANTAGE_CREDIT_LIMIT) * ADVANTAGE_COST
+  const availableXp = INITIAL_XP + disadvantageCredit
+  const remainingXp = availableXp - spentXp
   const derivedAttributes = useMemo(() => getDerivedAttributes(character), [character])
   const sheetPayload = useMemo(
     () => ({
@@ -1795,8 +1793,7 @@ function App() {
       !selectedSkillId ||
       !selectedSkill ||
       selectedSkillIds.includes(selectedSkillId) ||
-      !canUseSkill(selectedSkill, character.court) ||
-      (isStandardSkill(selectedSkill) && hasReachedStandardSkillLimit)
+      !canUseSkill(selectedSkill, character.court)
     ) {
       return
     }
@@ -1930,9 +1927,14 @@ function App() {
           </button>
           <span className="export-note">Exporta a versão salva mais recente.</span>
           <div className="header-stats" aria-label="Resumo de XP">
-            <strong>{INITIAL_XP} XP</strong>
-            <strong>{spentXp} gasto</strong>
-            <strong className={remainingXp < 0 ? 'danger' : 'success'}>{remainingXp} restante</strong>
+            <strong className="available-xp">
+              <span>{availableXp} xp</span>
+              <small>
+                {INITIAL_XP} base <em>+ {disadvantageCredit} bônus</em>
+              </small>
+            </strong>
+            <strong>{spentXp} xp gasto</strong>
+            <strong className={remainingXp < 0 ? 'danger' : 'success'}>{remainingXp} xp restante</strong>
           </div>
         </div>
       </section>
@@ -2422,10 +2424,6 @@ function App() {
             <h2>Perícias</h2>
             <span className="budget">{character.skills.length} adicionadas</span>
           </div>
-          {hasReachedStandardSkillLimit && (
-            <p className="limit-note">Só é possível adicionar até 6 perícias bélicas e eruditas.</p>
-          )}
-
           <div className="skill-picker">
             <select value={selectedSkillId} onChange={(event) => setSelectedSkillId(event.target.value)}>
               <option value="">Selecione uma perícia...</option>

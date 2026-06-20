@@ -163,17 +163,38 @@ h3 {
 .header-stats {
   display: flex;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
 }
 
 .header-stats strong {
-  min-width: 84px;
-  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--panel-bg);
   text-align: center;
+}
+
+.header-stats .available-xp {
+  display: grid;
+  gap: 3px;
+  min-width: 105px;
+}
+
+.available-xp small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.available-xp small em {
+  color: var(--success);
+  font-style: normal;
 }
 
 .ghost-button,
@@ -833,10 +854,20 @@ textarea:focus {
 
   .header-actions {
     justify-items: start;
+    width: 100%;
   }
 
   .header-stats {
     justify-content: flex-start;
+    width: 100%;
+  }
+
+  .header-stats strong,
+  .header-stats .available-xp {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 8px;
+    white-space: nowrap;
   }
 
   .workspace,
@@ -908,7 +939,7 @@ textarea:focus {
   }
 
   .header-stats strong {
-    flex: 1 1 92px;
+    font-size: 0.86rem;
   }
 
   .panel-heading {

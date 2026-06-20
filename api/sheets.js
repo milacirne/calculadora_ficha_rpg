@@ -6,7 +6,7 @@ const defaultState = {
   characters: [],
 }
 
-const backendVersion = '2026-06-20-get-v3'
+const backendVersion = '2026-06-20-cache-v4'
 
 function getPlayerId(request) {
   const url = new URL(request.url, `https://${request.headers.host || 'localhost'}`)
@@ -61,6 +61,9 @@ export default async function handler(request, response) {
 
   try {
     if (request.method === 'GET') {
+      response.setHeader('Cache-Control', 'no-store, max-age=0')
+      response.setHeader('CDN-Cache-Control', 'no-store')
+      response.setHeader('Vercel-CDN-Cache-Control', 'no-store')
       stage = 'listing'
       const existingFiles = await list({
         prefix: pathname,
@@ -75,7 +78,9 @@ export default async function handler(request, response) {
       }
 
       stage = 'reading'
-      const result = await fetch(existingFile.url, {
+      const blobUrl = new URL(existingFile.url)
+      blobUrl.searchParams.set('cache', '0')
+      const result = await fetch(blobUrl, {
         cache: 'no-store',
       })
 

@@ -1567,7 +1567,9 @@ function App() {
   useEffect(() => {
     let isCurrent = true
 
-    fetch(`${SHEETS_API_URL}?playerId=${encodeURIComponent(playerId)}`)
+    fetch(`${SHEETS_API_URL}?playerId=${encodeURIComponent(playerId)}`, {
+      cache: 'no-store',
+    })
       .then((response) => {
         if (!response.ok) {
           throw new Error('Nao foi possivel carregar as fichas.')

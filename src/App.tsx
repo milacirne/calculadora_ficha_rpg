@@ -1340,6 +1340,13 @@ function renderExportRows(items: string[]) {
   return `<ul>${items.map((item) => `<li>${item}</li>`).join('')}</ul>`
 }
 
+function renderExportXpDelta(value: number) {
+  const className = value >= 0 ? 'credit' : 'spend'
+  const label = value > 0 ? `+${value} XP` : `${value} XP`
+
+  return ` <span class="item-xp ${className}">${escapeHtml(label)}</span>`
+}
+
 function buildCharacterExportHtml(character: Character) {
   const spentXp = getCharacterSpentXp(character)
   const remainingXp = INITIAL_XP - spentXp
@@ -1349,20 +1356,27 @@ function buildCharacterExportHtml(character: Character) {
   const advantages = characterTraits.filter((trait) => trait.type === 'advantage')
   const disadvantages = characterTraits.filter((trait) => trait.type === 'disadvantage')
   const derivedRows = getDerivedAttributes(character).map(
-    (attribute) => `<li><strong>${escapeHtml(attribute.label)}:</strong> ${attribute.value} <small>${escapeHtml(attribute.formula)}</small></li>`,
+    (attribute) => `<strong>${escapeHtml(attribute.label)}:</strong> ${attribute.value}`,
   )
   const attributeRows = attributes.map(
-    (attribute) => `<li><strong>${escapeHtml(attribute.label)}:</strong> Nível ${character.attributes[attribute.key]}</li>`,
+    (attribute) =>
+      `<strong>${escapeHtml(attribute.label)}:</strong> Nível ${character.attributes[attribute.key]}${renderExportXpDelta(
+        -progressiveCost(character.attributes[attribute.key], attributeLevelCosts),
+      )}`,
   )
   const skillRows = character.skills.map((characterSkill) => {
     const skill = skills.find((currentSkill) => currentSkill.id === characterSkill.id)
 
-    return skill ? `${escapeHtml(formatSkillName(skill))}: Nível ${characterSkill.level}` : ''
+    return skill
+      ? `${escapeHtml(formatSkillName(skill))}: Nível ${characterSkill.level}${renderExportXpDelta(-skillCost(characterSkill.level))}`
+      : ''
   })
   const disciplineRows = character.battleDisciplines.map((characterDiscipline) => {
     const discipline = battleDisciplines.find((currentDiscipline) => currentDiscipline.id === characterDiscipline.id)
 
-    return discipline ? `${escapeHtml(discipline.title)}: Nível ${characterDiscipline.level}` : ''
+    return discipline
+      ? `${escapeHtml(discipline.title)}: Nível ${characterDiscipline.level}${renderExportXpDelta(-skillCost(characterDiscipline.level))}`
+      : ''
   })
 
   return `<!doctype html>
@@ -1375,6 +1389,9 @@ function buildCharacterExportHtml(character: Character) {
     h1 { font-family: Georgia, serif; font-size: 30px; margin: 0 0 4px; }
     h2 { border-bottom: 1px solid #c9b8a3; font-size: 15px; margin: 22px 0 10px; padding-bottom: 5px; text-transform: uppercase; }
     .meta, .muted, small { color: #6f6257; }
+    .item-xp { font-size: 11px; font-weight: 700; }
+    .item-xp.spend { color: #a53a4f; }
+    .item-xp.credit { color: #2f7d55; }
     .xp { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0; }
     .xp span { border: 1px solid #c9b8a3; border-radius: 6px; padding: 8px 10px; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
@@ -1405,9 +1422,17 @@ function buildCharacterExportHtml(character: Character) {
   ${renderExportRows(skillRows.filter(Boolean))}
   <h2>Dons de Linhagem</h2>
   ${renderExportRows([
-    characterLineageGift ? `${escapeHtml(characterLineageGift.title)} (${escapeHtml(character.court)}): Nível ${character.lineageGiftLevel}` : '',
+    characterLineageGift
+      ? `${escapeHtml(characterLineageGift.title)} (${escapeHtml(character.court)}): Nível ${character.lineageGiftLevel}${renderExportXpDelta(
+          -(character.lineageGiftLevel > 0 ? lineageGiftCost(character.lineageGiftLevel) : 0),
+        )}`
+      : '',
     secondaryGift
-      ? `${escapeHtml(secondaryGift.title)} (${escapeHtml(character.secondaryLineageGiftCourt)}): Nível ${character.secondaryLineageGiftLevel} - secundário`
+      ? `${escapeHtml(secondaryGift.title)} (${escapeHtml(character.secondaryLineageGiftCourt)}): Nível ${
+          character.secondaryLineageGiftLevel
+        } - secundário${renderExportXpDelta(
+          -(character.secondaryLineageGiftLevel > 0 ? lineageGiftCost(character.secondaryLineageGiftLevel) * 2 : 0),
+        )}`
       : '',
   ].filter(Boolean))}
   <h2>Disciplinas de Batalha</h2>
@@ -1415,11 +1440,11 @@ function buildCharacterExportHtml(character: Character) {
   <section class="grid">
     <div>
       <h2>Vantagens</h2>
-      ${renderExportRows(advantages.map((trait) => `${escapeHtml(trait.label)} - ${escapeHtml(trait.subtitle)}`))}
+      ${renderExportRows(advantages.map((trait) => `${escapeHtml(trait.label)} - ${escapeHtml(trait.subtitle)}${renderExportXpDelta(-ADVANTAGE_COST)}`))}
     </div>
     <div>
       <h2>Desvantagens</h2>
-      ${renderExportRows(disadvantages.map((trait) => `${escapeHtml(trait.label)} - ${escapeHtml(trait.subtitle)}`))}
+      ${renderExportRows(disadvantages.map((trait) => `${escapeHtml(trait.label)} - ${escapeHtml(trait.subtitle)}${renderExportXpDelta(ADVANTAGE_COST)}`))}
     </div>
   </section>
 </body>

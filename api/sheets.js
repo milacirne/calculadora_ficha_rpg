@@ -85,14 +85,14 @@ export default async function handler(request, response) {
         limit: 1,
         token: blobToken,
       })
-      const fileExists = existingFiles.blobs.some((blob) => blob.pathname === pathname)
+      const existingFile = existingFiles.blobs.find((blob) => blob.pathname === pathname)
 
-      if (!fileExists) {
+      if (!existingFile) {
         response.status(200).json(defaultState)
         return
       }
 
-      const result = await get(pathname, {
+      const result = await get(existingFile.url, {
         access: 'public',
         token: blobToken,
         useCache: false,

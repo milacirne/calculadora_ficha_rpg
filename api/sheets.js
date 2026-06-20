@@ -1,4 +1,4 @@
-import { get, list, put } from '@vercel/blob'
+import { list, put } from '@vercel/blob'
 
 const defaultState = {
   theme: 'dark',
@@ -37,28 +37,6 @@ function getErrorDetail(error) {
   return `${error.name}: ${error.message}${cause}`
 }
 
-async function streamToString(stream) {
-  if (!stream) {
-    return ''
-  }
-
-  const reader = stream.getReader()
-  const decoder = new TextDecoder()
-  let result = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-
-    if (done) {
-      break
-    }
-
-    result += decoder.decode(value, { stream: true })
-  }
-
-  return result + decoder.decode()
-}
-
 export default async function handler(request, response) {
   const playerId = getPlayerId(request)
 
@@ -92,18 +70,15 @@ export default async function handler(request, response) {
         return
       }
 
-      const result = await get(existingFile.url, {
-        access: 'public',
-        token: blobToken,
-        useCache: false,
+      const result = await fetch(existingFile.url, {
+        cache: 'no-store',
       })
 
-      if (!result || result.statusCode !== 200) {
-        response.status(200).json(defaultState)
-        return
+      if (!result.ok) {
+        throw new Error(`Falha ao ler a ficha salva: ${result.status} ${result.statusText}`)
       }
 
-      const savedState = JSON.parse(await streamToString(result.stream))
+      const savedState = JSON.parse(await result.text())
       response.status(200).json(sanitizeState(savedState))
       return
     }
